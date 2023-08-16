@@ -46,6 +46,8 @@ struct input_instr {
 
   unsigned long long destination_memory[NUM_INSTR_DESTINATIONS]; // output memory
   unsigned long long source_memory[NUM_INSTR_SOURCES];           // input memory
+
+  unsigned char flags;
 };
 
 struct cloudsuite_instr {
@@ -63,6 +65,7 @@ struct cloudsuite_instr {
   unsigned long long source_memory[NUM_INSTR_SOURCES];                 // input memory
 
   unsigned char asid[2];
+  unsigned char flags;
 };
 // NOLINTEND(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 

@@ -186,6 +186,16 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
     impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
   }
 
+  if (arch_instr.is_squash_after ||
+      arch_instr.is_serializing ||
+      arch_instr.is_serialize_after ||
+      arch_instr.is_serialize_before ||
+      arch_instr.is_non_spec){
+    //fmt::print("[SQUASH AFTER] instr_id: {} ip: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_taken);
+    fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+    stop_fetch = true;
+  }
+
   return stop_fetch;
 }
 
@@ -642,6 +652,16 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
+
+    if(it->is_squash_after ||
+       it->is_serializing ||
+       it->is_serialize_after ||
+       it->is_serialize_before ||
+       it->is_non_spec){
+      //fmt::print("[COMMIT SQUASH AFTER] ip: {:#x}\n", it->ip);
+      fetch_resume_cycle = current_cycle;
+    }
+
     if(prev_ip != it->ip){
 	    retire_count++;
     }

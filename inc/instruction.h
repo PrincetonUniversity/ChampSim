@@ -40,6 +40,16 @@ enum branch_type {
   NOT_BRANCH
 };
 
+enum flags {
+  NON_SPEC=0,
+  SERIAL,
+  SERIAL_AFTER,
+  SERIAL_BEFORE,
+  READ_BARRIER,
+  WRITE_BARRIER,
+  SQUASH_AFTER
+};
+
 using namespace std::literals::string_view_literals;
 inline constexpr std::array branch_type_names{"BRANCH_DIRECT_JUMP"sv, "BRANCH_INDIRECT"sv,      "BRANCH_CONDITIONAL"sv,
                                               "BRANCH_DIRECT_CALL"sv, "BRANCH_INDIRECT_CALL"sv, "BRANCH_RETURN"sv};
@@ -53,6 +63,14 @@ struct ooo_model_instr {
   bool branch_taken = false;
   bool branch_prediction = false;
   bool branch_mispredicted = false; // A branch can be mispredicted even if the direction prediction is correct when the predicted target is not correct
+
+  bool is_non_spec = false;
+  bool is_serializing = false;
+  bool is_serialize_after = false;
+  bool is_serialize_before = false;
+  bool is_read_barrier = false;
+  bool is_write_barrier = false;
+  bool is_squash_after = false;
 
   std::array<uint8_t, 2> asid = {std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::max()};
 
@@ -96,6 +114,16 @@ private:
     //bool reads_other = std::count_if(std::begin(source_registers), std::end(source_registers), [](uint8_t r) {
     //  return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
     //});
+
+    int flags = instr.flags;
+
+    is_non_spec = (flags & 1 << NON_SPEC);
+    is_serializing = (flags & 1 << SERIAL);
+    is_serialize_after = (flags & 1 << SERIAL_AFTER);
+    is_serialize_before = (flags & 1 << SERIAL_BEFORE);
+    is_read_barrier = (flags & 1 << READ_BARRIER);
+    is_write_barrier = (flags & 1 << WRITE_BARRIER);
+    is_squash_after = (flags & 1 << SQUASH_AFTER);
 
     int brCode = instr.is_branch;
 
