@@ -8,10 +8,10 @@
     "ooo_cpu": [
         {
             "frequency": 4000,
-            "ifetch_buffer_size":64,
+            "ifetch_buffer_size":512,
             "decode_buffer_size":32,
             "dispatch_buffer_size":32,
-            "rob_size": 352,
+            "rob_size": 512,
             "lq_size": 128,
             "sq_size": 72,
             "fetch_width": 6,
@@ -27,7 +27,7 @@
             "dispatch_latency": 1,
             "schedule_latency": 0,
             "execute_latency": 0,
-            "branch_predictor": "bimodal",
+            "branch_predictor": "hashed_perceptron",
             "btb": "basic_btb"
         }
     ],
@@ -45,7 +45,7 @@
         "wq_size": 64,
         "pq_size": 32,
         "mshr_size": 8,
-        "latency": 4,
+        "latency": 2,
         "max_tag_check": 2,
         "max_fill": 2,
         "prefetch_as_load": false,
@@ -61,7 +61,7 @@
         "wq_size": 64,
         "pq_size": 8,
         "mshr_size": 16,
-        "latency": 5,
+        "latency": 4,
         "max_tag_check": 2,
         "max_fill": 2,
         "prefetch_as_load": false,
@@ -72,7 +72,7 @@
 
     "L2C": {
         "sets": 1024,
-        "ways": 8,
+        "ways": 16,
         "rq_size": 32,
         "wq_size": 32,
         "pq_size": 16,

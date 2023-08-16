@@ -108,6 +108,7 @@ public:
   uint64_t last_heartbeat_cycle = 0;
   long long last_heartbeat_instr = 0;
   long long next_print_instruction = STAT_PRINTING_PERIOD;
+  uint64_t prev_ip=0;
 
   // instruction
   long long num_retired = 0;

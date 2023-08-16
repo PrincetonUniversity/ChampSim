@@ -24,6 +24,7 @@
 #include <limits>
 #include <string_view>
 #include <vector>
+#include <iostream>
 
 #include "trace_instruction.h"
 
@@ -87,54 +88,92 @@ private:
     std::remove_copy(std::begin(instr.destination_memory), std::end(instr.destination_memory), std::back_inserter(this->destination_memory), 0);
     std::remove_copy(std::begin(instr.source_memory), std::end(instr.source_memory), std::back_inserter(this->source_memory), 0);
 
-    bool writes_sp = std::count(std::begin(destination_registers), std::end(destination_registers), champsim::REG_STACK_POINTER);
-    bool writes_ip = std::count(std::begin(destination_registers), std::end(destination_registers), champsim::REG_INSTRUCTION_POINTER);
-    bool reads_sp = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_STACK_POINTER);
-    bool reads_flags = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_FLAGS);
-    bool reads_ip = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_INSTRUCTION_POINTER);
-    bool reads_other = std::count_if(std::begin(source_registers), std::end(source_registers), [](uint8_t r) {
-      return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
-    });
+    //bool writes_sp = std::count(std::begin(destination_registers), std::end(destination_registers), champsim::REG_STACK_POINTER);
+    //bool writes_ip = std::count(std::begin(destination_registers), std::end(destination_registers), champsim::REG_INSTRUCTION_POINTER);
+    //bool reads_sp = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_STACK_POINTER);
+    //bool reads_flags = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_FLAGS);
+    //bool reads_ip = std::count(std::begin(source_registers), std::end(source_registers), champsim::REG_INSTRUCTION_POINTER);
+    //bool reads_other = std::count_if(std::begin(source_registers), std::end(source_registers), [](uint8_t r) {
+    //  return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
+    //});
 
-    // determine what kind of branch this is, if any
-    if (!reads_sp && !reads_flags && writes_ip && !reads_other) {
-      // direct jump
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_DIRECT_JUMP;
-    } else if (!reads_sp && !reads_flags && writes_ip && reads_other) {
-      // indirect branch
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_INDIRECT;
-    } else if (!reads_sp && reads_ip && !writes_sp && writes_ip && reads_flags && !reads_other) {
-      // conditional branch
-      is_branch = true;
-      branch_taken = instr.branch_taken; // don't change this
-      branch = BRANCH_CONDITIONAL;
-    } else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && !reads_other) {
-      // direct call
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_DIRECT_CALL;
-    } else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && reads_other) {
-      // indirect call
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_INDIRECT_CALL;
-    } else if (reads_sp && !reads_ip && writes_sp && writes_ip) {
-      // return
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_RETURN;
-    } else if (writes_ip) {
-      // some other branch type that doesn't fit the above categories
-      is_branch = true;
-      branch_taken = instr.branch_taken; // don't change this
-      branch = BRANCH_OTHER;
-    } else {
-      branch_taken = false;
+    int brCode = instr.is_branch;
+
+    if(brCode & 0x1){
+        if(brCode & (1 << 1)){
+		//Conditional
+		if(brCode & ( 1 << 2)){
+			branch = BRANCH_CONDITIONAL;
+			//DIrect Ctrl
+			if(brCode & (1<<3)){
+				branch = BRANCH_DIRECT_CALL;
+			}
+		}else{
+			std::cout << "This should not happen" << std::endl;
+		}
+	}else{
+		//Unconditional
+		if(brCode & ( 1 << 2)){
+		        branch = BRANCH_DIRECT_JUMP;
+			//DIrect Ctrl
+			if(brCode & (1<<3)){
+				branch = BRANCH_DIRECT_CALL;
+			}
+		}else{
+			//Indirect Ctrl
+		        branch = BRANCH_INDIRECT;
+
+			if(brCode & (1 << 4)){
+				//is REturn
+				branch = BRANCH_RETURN;
+			}
+
+			// Indirest Call
+			if(brCode & (1<<3)){
+				branch = BRANCH_INDIRECT_CALL;
+			}
+		}
+	}
     }
+    //// determine what kind of branch this is, if any
+    //if (!reads_sp && !reads_flags && writes_ip && !reads_other) {
+    //  // direct jump
+    //  is_branch = true;
+    //  branch_taken = true;
+    //  branch = BRANCH_DIRECT_JUMP;
+    //} else if (!reads_sp && !reads_flags && writes_ip && reads_other) {
+    //  // indirect branch
+    //  is_branch = true;
+    //  branch_taken = true;
+    //  branch = BRANCH_INDIRECT;
+    //} else if (!reads_sp && reads_ip && !writes_sp && writes_ip && reads_flags && !reads_other) {
+    //  // conditional branch
+    //  is_branch = true;
+    //  branch_taken = instr.branch_taken; // don't change this
+    //  branch = BRANCH_CONDITIONAL;
+    //} else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && !reads_other) {
+    //  // direct call
+    //  is_branch = true;
+    //  branch_taken = true;
+    //  branch = BRANCH_DIRECT_CALL;
+    //} else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && reads_other) {
+    //  // indirect call
+    //  is_branch = true;
+    //  branch_taken = true;
+    //  branch = BRANCH_INDIRECT_CALL;
+    //} else if (reads_sp && !reads_ip && writes_sp && writes_ip) {
+    //  // return
+    //  is_branch = true;
+    //  branch_taken = true;
+    //  branch = BRANCH_RETURN;
+    //} else if (writes_ip) {
+    //  // some other branch type that doesn't fit the above categories
+    //  is_branch = true;
+    //  branch_taken = instr.branch_taken; // don't change this
+    //  branch = BRANCH_OTHER;
+    //} else {
+    //  branch_taken = false;
+    //}
   }
 
 public:

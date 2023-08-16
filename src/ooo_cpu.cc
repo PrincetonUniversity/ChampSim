@@ -637,7 +637,19 @@ long O3_CPU::retire_rob()
   if constexpr (champsim::debug_print) {
     std::for_each(retire_begin, retire_end, [](const auto& x) { fmt::print("[ROB] retire_rob instr_id: {} is retired\n", x.instr_id); });
   }
-  auto retire_count = std::distance(retire_begin, retire_end);
+
+  //auto retire_count = std::distance(retire_begin, retire_end);
+  auto retire_count = 0;
+  auto it = retire_begin;
+  while (it != retire_end){
+    if(prev_ip != it->ip){
+	    retire_count++;
+    }
+    prev_ip = it->ip;
+    it++;
+  }
+  //std::for_each(retire_begin, retire_end, [](const auto& x) { fmt::print("[ROB] retire_rob instr_ip: {:x} is retired\n", x.ip); });
+
   num_retired += retire_count;
   ROB.erase(retire_begin, retire_end);
 
