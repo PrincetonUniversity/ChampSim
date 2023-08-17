@@ -182,7 +182,7 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
       stop_fetch = arch_instr.branch_taken; // if correctly predicted taken, then we can't fetch anymore instructions this cycle
     }
 
-    impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
+    //impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
     impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
   }
 
@@ -190,6 +190,8 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
       arch_instr.is_serializing ||
       arch_instr.is_serialize_after ||
       arch_instr.is_serialize_before ||
+      arch_instr.is_write_barrier ||
+      arch_instr.is_read_barrier ||
       arch_instr.is_non_spec){
     //fmt::print("[SQUASH AFTER] instr_id: {} ip: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_taken);
     fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
@@ -653,10 +655,16 @@ long O3_CPU::retire_rob()
   auto it = retire_begin;
   while (it != retire_end){
 
+    if(it->is_branch){
+      impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
+    }
+
     if(it->is_squash_after ||
        it->is_serializing ||
        it->is_serialize_after ||
        it->is_serialize_before ||
+       it->is_write_barrier ||
+       it->is_read_barrier ||
        it->is_non_spec){
       //fmt::print("[COMMIT SQUASH AFTER] ip: {:#x}\n", it->ip);
       fetch_resume_cycle = current_cycle;
