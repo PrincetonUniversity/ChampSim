@@ -22,8 +22,8 @@ struct direct_predictor {
     uint64_t target = 0;
     branch_info type = branch_info::ALWAYS_TAKEN;
 
-    auto index() const { return ip_tag >> 2; }
-    auto tag() const { return ip_tag >> 2; }
+    auto index() const { return ip_tag >> 0; }
+    auto tag() const { return ip_tag >> 0; }
   };
 
   champsim::msl::lru_table<btb_entry_t> BTB{sets, ways};
