@@ -107,7 +107,8 @@ void O3_CPU::end_phase(unsigned finished_cpu)
 
 void O3_CPU::initialize_instruction()
 {
-  auto instrs_to_read_this_cycle = std::min(FETCH_WIDTH, static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER)));
+  //auto instrs_to_read_this_cycle = std::min(FETCH_WIDTH, static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER)));
+  auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
 
   while (current_cycle >= fetch_resume_cycle && instrs_to_read_this_cycle > 0 && !std::empty(input_queue)) {
     instrs_to_read_this_cycle--;
@@ -186,17 +187,17 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
     impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
   }
 
-  if (arch_instr.is_squash_after ||
-      arch_instr.is_serializing ||
-      arch_instr.is_serialize_after ||
-      arch_instr.is_serialize_before ||
-      arch_instr.is_write_barrier ||
-      arch_instr.is_read_barrier ||
-      arch_instr.is_non_spec){
-    //fmt::print("[SQUASH AFTER] instr_id: {} ip: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_taken);
-    fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
-    stop_fetch = true;
-  }
+  //if (arch_instr.is_squash_after ||
+  //    arch_instr.is_serializing ||
+  //    arch_instr.is_serialize_after ||
+  //    arch_instr.is_serialize_before ||
+  //    arch_instr.is_write_barrier ||
+  //    arch_instr.is_read_barrier ||
+  //    arch_instr.is_non_spec){
+  //  //fmt::print("[SQUASH AFTER] instr_id: {} ip: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_taken);
+  //  fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+  //  stop_fetch = true;
+  //}
 
   return stop_fetch;
 }
@@ -264,6 +265,7 @@ long O3_CPU::fetch_instruction()
     auto success = do_fetch_instruction(l1i_req_begin, l1i_req_end);
     if (success) {
       std::for_each(l1i_req_begin, l1i_req_end, [](auto& x) { x.fetch_issued = true; });
+      prev_fetch_block = l1i_req_begin->ip >> LOG2_BLOCK_SIZE;
       ++progress;
     }
 
@@ -275,10 +277,22 @@ long O3_CPU::fetch_instruction()
 
 bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, std::deque<ooo_model_instr>::iterator end)
 {
+  //BGODALA
+  //fmt::print("[IFETCH] {} instr_id: {} fid: {} ip: {:#x} block: {:#x} cycle: {}\n", __func__, begin->instr_id, begin->fetch_instr_id, begin->ip, (begin->ip >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE, current_cycle);
+  if(prev_fetch_block && begin->ip >> LOG2_BLOCK_SIZE == prev_fetch_block){
+    return true;
+  }
+  //if(!L1I_bus.lower_level->RQ.empty() && begin->ip >> LOG2_BLOCK_SIZE == L1I_bus.lower_level->RQ.back().ip >> LOG2_BLOCK_SIZE){
+  //  std::transform(begin, end, std::back_inserter(L1I_bus.lower_level->RQ.back().instr_depend_on_me), [](const auto& instr) { return instr.instr_id; });
+  //  return true;
+  //}
+
   CacheBus::request_type fetch_packet;
   fetch_packet.v_address = begin->ip;
   fetch_packet.instr_id = begin->instr_id;
   fetch_packet.ip = begin->ip;
+
+  last_fetch_packet = fetch_packet;
 
   std::transform(begin, end, std::back_inserter(fetch_packet.instr_depend_on_me), [](const auto& instr) { return instr.instr_id; });
 
@@ -286,6 +300,7 @@ bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, s
     fmt::print("[IFETCH] {} instr_id: {} ip: {:#x} dependents: {} event_cycle: {}\n", __func__, begin->instr_id, begin->ip,
                std::size(fetch_packet.instr_depend_on_me), begin->event_cycle);
   }
+
 
   return L1I_bus.issue_read(fetch_packet);
 }
@@ -325,6 +340,7 @@ long O3_CPU::decode_instruction()
         db_entry.branch_mispredicted = 0;
         // pay misprediction penalty
         this->fetch_resume_cycle = this->current_cycle + BRANCH_MISPREDICT_PENALTY;
+	prev_fetch_block = 0;
       }
     }
 
@@ -580,6 +596,9 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 
   if (instr.branch_mispredicted) {
     fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
+    prev_fetch_block = 0;
+
+    //fmt::print("C[EXEC]: cycle {} ip: {:x} branch {}\n", current_cycle, instr.ip, instr.branch); 
   }
 }
 
@@ -604,27 +623,42 @@ long O3_CPU::handle_memory_return()
   for (auto l1i_bw = FETCH_WIDTH, to_read = L1I_BANDWIDTH; l1i_bw > 0 && to_read > 0 && !L1I_bus.lower_level->returned.empty(); --to_read) {
     auto& l1i_entry = L1I_bus.lower_level->returned.front();
 
-    while (l1i_bw > 0 && !l1i_entry.instr_depend_on_me.empty()) {
-      auto fetched = std::find_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER),
-                                  [id = l1i_entry.instr_depend_on_me.front()](const auto& x) { return x.instr_id == id; });
+    //while (l1i_bw > 0) {
+    //  auto fetched = std::find_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER),
+    //                              [fid = l1i_entry.instr_id](const auto& x) { return x.fetch_instr_id == fid && !x.fetch_completed; });
+    for (auto fetched = std::begin(IFETCH_BUFFER) ; fetched != std::end(IFETCH_BUFFER); fetched++){ 
+
+      //if(fetched->fetch_instr_id > l1i_entry.instr_id)
+      //  continue;
+
+      if(fetched != std::end(IFETCH_BUFFER) && (fetched->ip >> LOG2_BLOCK_SIZE) == (l1i_entry.v_address >> LOG2_BLOCK_SIZE) && !fetched->fetch_issued){
+        prev_fetch_block = 0;
+      }
       if (fetched != std::end(IFETCH_BUFFER) && (fetched->ip >> LOG2_BLOCK_SIZE) == (l1i_entry.v_address >> LOG2_BLOCK_SIZE) && fetched->fetch_issued) {
         fetched->fetch_completed = true;
-        --l1i_bw;
+        //--l1i_bw;
         ++progress;
 
         if constexpr (champsim::debug_print) {
           fmt::print("[IFETCH] {} instr_id: {} fetch completed\n", __func__, fetched->instr_id);
         }
       }
+    
 
-      l1i_entry.instr_depend_on_me.erase(std::begin(l1i_entry.instr_depend_on_me));
+      //l1i_entry.instr_depend_on_me.erase(std::begin(l1i_entry.instr_depend_on_me));
     }
 
     // remove this entry if we have serviced all of its instructions
-    if (l1i_entry.instr_depend_on_me.empty()) {
+    //if (l1i_entry.instr_depend_on_me.empty()) {
+    //  L1I_bus.lower_level->returned.pop_front();
+    //  ++progress;
+    //}
       L1I_bus.lower_level->returned.pop_front();
       ++progress;
-    }
+
+      if(!IFETCH_BUFFER.empty() && IFETCH_BUFFER.back().fetch_completed){
+          prev_fetch_block = 0;
+      }
   }
 
   auto l1d_it = std::begin(L1D_bus.lower_level->returned);
@@ -656,19 +690,21 @@ long O3_CPU::retire_rob()
   while (it != retire_end){
 
     if(it->is_branch){
+      //fmt::print("[BTB]: Update ip:{:x} target:{:x} taken:{} type:{}\n", it->ip, it->branch_target, it->branch_taken, it->branch); 
       impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
+      //impl_last_branch_result(it->ip, it->branch_target, it->branch_taken, it->branch);
     }
 
-    if(it->is_squash_after ||
-       it->is_serializing ||
-       it->is_serialize_after ||
-       it->is_serialize_before ||
-       it->is_write_barrier ||
-       it->is_read_barrier ||
-       it->is_non_spec){
-      //fmt::print("[COMMIT SQUASH AFTER] ip: {:#x}\n", it->ip);
-      fetch_resume_cycle = current_cycle;
-    }
+    //if(it->is_squash_after ||
+    //   it->is_serializing ||
+    //   it->is_serialize_after ||
+    //   it->is_serialize_before ||
+    //   it->is_write_barrier ||
+    //   it->is_read_barrier ||
+    //   it->is_non_spec){
+    //  //fmt::print("[COMMIT SQUASH AFTER] ip: {:#x}\n", it->ip);
+    //  fetch_resume_cycle = current_cycle;
+    //}
 
     if(prev_ip != it->ip){
 	    retire_count++;
@@ -771,7 +807,8 @@ void LSQ_ENTRY::finish(ooo_model_instr& rob_entry) const
 
 bool CacheBus::issue_read(request_type data_packet)
 {
-  data_packet.address = data_packet.v_address;
+  //data_packet.address = data_packet.v_address;
+  data_packet.address = (data_packet.v_address >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
   data_packet.is_translated = false;
   data_packet.cpu = cpu;
   data_packet.type = access_type::LOAD;

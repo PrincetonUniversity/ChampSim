@@ -109,6 +109,8 @@ public:
   long long last_heartbeat_instr = 0;
   long long next_print_instruction = STAT_PRINTING_PERIOD;
   uint64_t prev_ip=0;
+  uint64_t prev_fetch_block=0;
+  CacheBus::request_type last_fetch_packet;
 
   // instruction
   long long num_retired = 0;

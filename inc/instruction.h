@@ -115,6 +115,23 @@ private:
     //  return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
     //});
 
+    //bool found = true;
+    //std::cout<< std::hex << ip <<": ";
+    //for(auto it = std::begin(instr.source_registers); it != std::end(instr.source_registers); it++){
+    //    std::cout<< std::dec << (int)*it <<" ";
+    //    if((int)*it != 0){
+    //      found = false;
+    //    }
+    //}
+
+    //if(found){
+    //    std::cout<<"No source ";
+    //}
+
+    //std::cout << std::endl ;
+
+    
+
     int flags = instr.flags;
 
     is_non_spec = (flags & 1 << NON_SPEC);

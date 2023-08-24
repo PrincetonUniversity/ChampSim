@@ -23,10 +23,10 @@
             "retire_width": 5,
             "mispredict_penalty": 10,
             "scheduler_size": 128,
-            "decode_latency": 1,
+            "decode_latency": 8,
             "dispatch_latency": 1,
-            "schedule_latency": 0,
-            "execute_latency": 0,
+            "schedule_latency": 2,
+            "execute_latency": 2,
             "branch_predictor": "hashed_perceptron",
             "btb": "basic_btb"
         }
