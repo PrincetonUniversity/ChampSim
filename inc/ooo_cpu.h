@@ -115,6 +115,9 @@ public:
   uint64_t last_branch=0;
   bool restart=false;
   bool in_wrong_path = false;
+  uint64_t fetch_instr_id=0;
+  uint64_t retire_instr_id=0;
+  bool enable_wrong_path=false;
 
   // instruction
   long long num_retired = 0;

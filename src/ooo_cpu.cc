@@ -31,7 +31,7 @@
 #include "trace_instruction.h" // for REG_STACK_POINTER, REG_FLAGS, REG_INS...
 #include "util/span.h"
 
-#define BGODALA 0
+//#define BGODALA 0
 
 std::chrono::seconds elapsed_time();
 
@@ -112,27 +112,43 @@ void O3_CPU::initialize_instruction()
   //auto instrs_to_read_this_cycle = std::min(FETCH_WIDTH, static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER)));
   auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
 
-  if(in_wrong_path && restart){
-    //  fmt::print("skip wrong path\n");
-      while(!input_queue.empty() && input_queue.front().is_wrong_path){
-          input_queue.pop_front();
-      }
-      restart = false;
-      in_wrong_path = false;
-      fetch_resume_cycle = current_cycle;
-  }else if (restart){
-    //  fmt::print("Only restart\n");
-      restart = false;
+
+  if(fetch_instr_id == retire_instr_id){
+      prev_fetch_block = 0;
       fetch_resume_cycle = current_cycle;
   }
 
-  //while(!input_queue.empty() && input_queue.front().is_wrong_path){
-  //    input_queue.pop_front();
+  //if(in_wrong_path && restart){
+  //  //  fmt::print("skip wrong path\n");
+  //    while(!input_queue.empty() && input_queue.front().is_wrong_path){
+  //        input_queue.pop_front();
+  //    }
+  //    restart = false;
+  //    in_wrong_path = false;
+  //    fetch_resume_cycle = current_cycle;
+  //}else if (restart){
+  //  //  fmt::print("Only restart\n");
+  //    restart = false;
+  //    fetch_resume_cycle = current_cycle;
   //}
+
 
   while (current_cycle >= fetch_resume_cycle && instrs_to_read_this_cycle > 0 && !std::empty(input_queue)) {
     instrs_to_read_this_cycle--;
 
+      if(!enable_wrong_path){
+        while(!input_queue.empty() && input_queue.front().is_wrong_path){
+            auto inst = input_queue.front();
+#ifdef BGODALA
+            fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+#endif
+            input_queue.pop_front();
+        }
+
+        if(input_queue.empty()){
+           break;
+        }
+      }
     //if(last_branch){
     //    WPATH_MAP[last_branch].push_back(input_queue.front());    
     //}
@@ -155,11 +171,17 @@ void O3_CPU::initialize_instruction()
 	break;
     }
 
-    if (inst.branch_mispredicted){
+    if (inst.branch_mispredicted || inst.is_wrong_path){
         in_wrong_path = true;
 	restart = false;
-	//stop_fetch = true;
-        //fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+	if(!enable_wrong_path){
+	  stop_fetch = true;
+          fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+	}
+    }
+
+    if(!inst.is_wrong_path){
+        fetch_instr_id = inst.instr_id;
     }
 
     if (stop_fetch) {
@@ -330,7 +352,7 @@ long O3_CPU::fetch_instruction()
     auto success = do_fetch_instruction(l1i_req_begin, l1i_req_end);
     if (success) {
       std::for_each(l1i_req_begin, l1i_req_end, [](auto& x) { x.fetch_issued = true; });
-      prev_fetch_block = l1i_req_begin->ip >> LOG2_BLOCK_SIZE;
+      //prev_fetch_block = l1i_req_begin->ip >> LOG2_BLOCK_SIZE;
       ++progress;
     }
 
@@ -757,11 +779,15 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
+    if(!it->is_wrong_path){
+        retire_instr_id = it->instr_id;
+    }
     if(it->is_wrong_path){
 	#ifdef BGODALA
         fmt::print("[RESTART]: ip:{:#x} wrong path: {}\n", it->ip, it->is_wrong_path); 
         #endif
         restart = true;
+	prev_fetch_block = 0;
     }
 
     if(it->branch_mispredicted && !it->is_wrong_path){
@@ -771,6 +797,7 @@ long O3_CPU::retire_rob()
         if(fetch_resume_cycle > current_cycle){
 	    fetch_resume_cycle = current_cycle;
             restart = true;
+	    prev_fetch_block = 0;
 	}
     }
 
