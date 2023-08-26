@@ -29,6 +29,7 @@
 #include <functional> // for reference_wrapper
 #include <limits>
 #include <memory>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>  // for string, basic_string
@@ -111,6 +112,9 @@ public:
   uint64_t prev_ip=0;
   uint64_t prev_fetch_block=0;
   CacheBus::request_type last_fetch_packet;
+  uint64_t last_branch=0;
+  bool restart=false;
+  bool in_wrong_path = false;
 
   // instruction
   long long num_retired = 0;
@@ -134,6 +138,9 @@ public:
   std::deque<ooo_model_instr> DISPATCH_BUFFER;
   std::deque<ooo_model_instr> DECODE_BUFFER;
   std::deque<ooo_model_instr> ROB;
+
+  //BGODALA: Wrong Path
+  std::map<uint64_t,std::deque<ooo_model_instr>> WPATH_MAP;
 
   std::vector<std::optional<LSQ_ENTRY>> LQ;
   std::deque<LSQ_ENTRY> SQ;

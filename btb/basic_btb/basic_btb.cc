@@ -12,8 +12,13 @@
 
 void basic_btb::initialize_btb() {}
 
-std::pair<uint64_t, bool> basic_btb::btb_prediction(uint64_t ip)
+std::pair<uint64_t, bool> basic_btb::btb_prediction(uint64_t ip, uint8_t branch_type)
 {
+  //fmt::print("btb_prediction ip {:#x} \n", ip);
+  // add something to the RAS
+  //if (branch_type == BRANCH_DIRECT_CALL || branch_type == BRANCH_INDIRECT_CALL)
+  //  ras.push(ip);
+ 
   // use BTB for all other branches + direct calls
   auto btb_entry = direct.check_hit(ip);
 

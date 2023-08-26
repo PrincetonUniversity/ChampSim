@@ -31,6 +31,8 @@
 #include "trace_instruction.h" // for REG_STACK_POINTER, REG_FLAGS, REG_INS...
 #include "util/span.h"
 
+#define BGODALA 0
+
 std::chrono::seconds elapsed_time();
 
 long O3_CPU::operate()
@@ -110,10 +112,56 @@ void O3_CPU::initialize_instruction()
   //auto instrs_to_read_this_cycle = std::min(FETCH_WIDTH, static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER)));
   auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
 
+  if(in_wrong_path && restart){
+    //  fmt::print("skip wrong path\n");
+      while(!input_queue.empty() && input_queue.front().is_wrong_path){
+          input_queue.pop_front();
+      }
+      restart = false;
+      in_wrong_path = false;
+      fetch_resume_cycle = current_cycle;
+  }else if (restart){
+    //  fmt::print("Only restart\n");
+      restart = false;
+      fetch_resume_cycle = current_cycle;
+  }
+
+  //while(!input_queue.empty() && input_queue.front().is_wrong_path){
+  //    input_queue.pop_front();
+  //}
+
   while (current_cycle >= fetch_resume_cycle && instrs_to_read_this_cycle > 0 && !std::empty(input_queue)) {
     instrs_to_read_this_cycle--;
 
-    auto stop_fetch = do_init_instruction(input_queue.front());
+    //if(last_branch){
+    //    WPATH_MAP[last_branch].push_back(input_queue.front());    
+    //}
+
+    auto inst = input_queue.front();
+
+    //auto stop_fetch = do_init_instruction(input_queue.front());
+    auto stop_fetch = false;
+    #ifdef BGODALA
+    fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+    #endif
+
+    if (in_wrong_path && !inst.is_wrong_path){
+        stop_fetch = true;
+	in_wrong_path = false;
+        fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+        #ifdef BGODALA
+	fmt::print("wrong path over at ip: {:#x}\n", inst.ip);
+        #endif
+	break;
+    }
+
+    if (inst.branch_mispredicted){
+        in_wrong_path = true;
+	restart = false;
+	//stop_fetch = true;
+        //fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+    }
+
     if (stop_fetch) {
       instrs_to_read_this_cycle = 0;
     }
@@ -183,8 +231,25 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
       stop_fetch = arch_instr.branch_taken; // if correctly predicted taken, then we can't fetch anymore instructions this cycle
     }
 
-    //impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
+    if(arch_instr.branch_mispredicted){
+        auto wpath = arch_instr.branch_taken ? arch_instr.ip : arch_instr.branch_target;
+	fmt::print("WRONG PATH: branch: {:#x} wpath: {:#x}\n", arch_instr.ip, wpath);
+        for(auto wp_inst: WPATH_MAP[wpath]){
+	    fmt::print("{:#x}\n", wp_inst.ip);
+	}	
+    }
+
+    fmt::print("[BRANCH] instr_id: {} ip: {:#x} target: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken);
+    impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
     impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
+    //fmt::print("[BRANCH] instr_id: {} ip: {:#x} target: {:#x} taken: {}\n", arch_instr.instr_id, arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken);
+
+    if(arch_instr.branch_taken){
+      last_branch = arch_instr.branch_target;
+    }else{
+      last_branch = arch_instr.ip;
+    }
+    WPATH_MAP[last_branch].clear();
   }
 
   //if (arch_instr.is_squash_after ||
@@ -332,15 +397,18 @@ long O3_CPU::decode_instruction()
     this->do_dib_update(db_entry);
 
     // Resume fetch
-    if (db_entry.branch_mispredicted) {
+    if (db_entry.branch_mispredicted && !db_entry.is_wrong_path) {
       // These branches detect the misprediction at decode
-      if ((db_entry.branch == BRANCH_DIRECT_JUMP) || (db_entry.branch == BRANCH_DIRECT_CALL)
-          || (((db_entry.branch == BRANCH_CONDITIONAL) || (db_entry.branch == BRANCH_OTHER)) && db_entry.branch_taken == db_entry.branch_prediction)) {
+      if ((db_entry.branch == BRANCH_DIRECT_JUMP) 
+          || (db_entry.branch == BRANCH_DIRECT_CALL)
+          || (((db_entry.branch == BRANCH_CONDITIONAL) || (db_entry.branch == BRANCH_OTHER)) 
+		  && db_entry.branch_taken == db_entry.branch_prediction)) {
         // clear the branch_mispredicted bit so we don't attempt to resume fetch again at execute
-        db_entry.branch_mispredicted = 0;
+        //db_entry.branch_mispredicted = 0;
         // pay misprediction penalty
         this->fetch_resume_cycle = this->current_cycle + BRANCH_MISPREDICT_PENALTY;
 	prev_fetch_block = 0;
+	restart = true;
       }
     }
 
@@ -594,9 +662,10 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
     }
   }
 
-  if (instr.branch_mispredicted) {
+  if (instr.branch_mispredicted && !instr.is_wrong_path) {
     fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
     prev_fetch_block = 0;
+    restart = true;
 
     //fmt::print("C[EXEC]: cycle {} ip: {:x} branch {}\n", current_cycle, instr.ip, instr.branch); 
   }
@@ -688,12 +757,28 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
-
-    if(it->is_branch){
-      //fmt::print("[BTB]: Update ip:{:x} target:{:x} taken:{} type:{}\n", it->ip, it->branch_target, it->branch_taken, it->branch); 
-      impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
-      //impl_last_branch_result(it->ip, it->branch_target, it->branch_taken, it->branch);
+    if(it->is_wrong_path){
+	#ifdef BGODALA
+        fmt::print("[RESTART]: ip:{:#x} wrong path: {}\n", it->ip, it->is_wrong_path); 
+        #endif
+        restart = true;
     }
+
+    if(it->branch_mispredicted && !it->is_wrong_path){
+	#ifdef BGODALA
+        fmt::print("[RESTEER]: ip:{:#x} wrong path: {}\n", it->ip, it->is_wrong_path); 
+        #endif
+        if(fetch_resume_cycle > current_cycle){
+	    fetch_resume_cycle = current_cycle;
+            restart = true;
+	}
+    }
+
+    //if(it->is_branch){
+    //  //fmt::print("[BTB]: Update ip:{:x} target:{:x} taken:{} type:{}\n", it->ip, it->branch_target, it->branch_taken, it->branch); 
+    //  //impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
+    //  //impl_last_branch_result(it->ip, it->branch_target, it->branch_taken, it->branch);
+    //}
 
     //if(it->is_squash_after ||
     //   it->is_serializing ||
@@ -707,7 +792,8 @@ long O3_CPU::retire_rob()
     //}
 
     if(prev_ip != it->ip){
-	    retire_count++;
+      if(!it->is_wrong_path)
+        retire_count++;
     }
     prev_ip = it->ip;
     it++;

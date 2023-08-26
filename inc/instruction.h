@@ -47,7 +47,8 @@ enum flags {
   SERIAL_BEFORE,
   READ_BARRIER,
   WRITE_BARRIER,
-  SQUASH_AFTER
+  SQUASH_AFTER,
+  SQUASHED
 };
 
 using namespace std::literals::string_view_literals;
@@ -71,6 +72,7 @@ struct ooo_model_instr {
   bool is_read_barrier = false;
   bool is_write_barrier = false;
   bool is_squash_after = false;
+  bool is_wrong_path = false;
 
   std::array<uint8_t, 2> asid = {std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::max()};
 
@@ -116,7 +118,7 @@ private:
     //});
 
     //bool found = true;
-    //std::cout<< std::hex << ip <<": ";
+    //std::cout << "0x"<< std::hex << ip <<": "<<std::endl;
     //for(auto it = std::begin(instr.source_registers); it != std::end(instr.source_registers); it++){
     //    std::cout<< std::dec << (int)*it <<" ";
     //    if((int)*it != 0){
@@ -141,6 +143,7 @@ private:
     is_read_barrier = (flags & 1 << READ_BARRIER);
     is_write_barrier = (flags & 1 << WRITE_BARRIER);
     is_squash_after = (flags & 1 << SQUASH_AFTER);
+    is_wrong_path = (flags & 1 << SQUASHED);
 
     int brCode = instr.is_branch;
 
