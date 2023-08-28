@@ -152,23 +152,6 @@ void O3_CPU::initialize_instruction()
 	}
   }
 
-
-
-  //if(in_wrong_path && restart){
-  //  //  fmt::print("skip wrong path\n");
-  //    while(!input_queue.empty() && input_queue.front().is_wrong_path){
-  //        input_queue.pop_front();
-  //    }
-  //    restart = false;
-  //    in_wrong_path = false;
-  //    fetch_resume_cycle = current_cycle;
-  //}else if (restart){
-  //  //  fmt::print("Only restart\n");
-  //    restart = false;
-  //    fetch_resume_cycle = current_cycle;
-  //}
-
-
   while (current_cycle >= fetch_resume_cycle && instrs_to_read_this_cycle > 0 && !std::empty(input_queue)) {
     instrs_to_read_this_cycle--;
 
@@ -227,7 +210,9 @@ void O3_CPU::initialize_instruction()
     }
 
     if(inst.before_wrong_path){
+#ifdef BGODALA
         fmt::print("before wrong path instr_id {}\n", inst.instr_id);
+#endif
         fetch_instr_id = inst.instr_id;
     }
 
@@ -760,11 +745,15 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
     restart = true;
 
     //fmt::print("C[EXEC]: cycle {} ip: {:x} branch {}\n", current_cycle, instr.ip, instr.branch); 
+#ifdef BGODALA
     fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {}\n", current_cycle, instr.instr_id, ROB.size());
+#endif
   }
 
       if(!instr.is_wrong_path && instr.before_wrong_path &&  !instr.squashed && instr.instr_id == fetch_instr_id){
+#ifdef BGODALA
         fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {} fetch_instr_id {}\n", current_cycle, instr.instr_id, ROB.size(), fetch_instr_id);
+#endif
         instr.squashed = true;
 
         for_each(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { 
@@ -775,7 +764,9 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
             	      x.executed = true; 
             	      //do_complete_execution(x);
             	      //x.completed = true;
+#ifdef BGODALA
             	      fmt::print("FLUSH instr_id: {} is_wrong_path: {}\n", x.instr_id, x.is_wrong_path);  
+#endif
             	      std::cout <<std::flush;
             	    }; } );
         //if (it != std::end(ROB)){
