@@ -117,7 +117,9 @@ public:
   bool in_wrong_path = false;
   uint64_t fetch_instr_id=0;
   uint64_t retire_instr_id=0;
+  uint64_t exec_instr_id=0;
   bool enable_wrong_path=false;
+  uint64_t flush_after=0;
 
   // instruction
   long long num_retired = 0;
@@ -161,7 +163,7 @@ public:
   // branch
   uint64_t fetch_resume_cycle = 0;
 
-  const long IN_QUEUE_SIZE = 2 * FETCH_WIDTH;
+  const long IN_QUEUE_SIZE = 10 * ROB_SIZE;
   std::deque<ooo_model_instr> input_queue;
 
   CacheBus L1I_bus, L1D_bus;

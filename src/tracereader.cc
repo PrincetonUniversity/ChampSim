@@ -34,6 +34,8 @@ ooo_model_instr apply_branch_target(ooo_model_instr branch, const ooo_model_inst
   branch.branch_target = (branch.is_branch && branch.branch_taken) ? target.ip : 0;
   if(target.is_wrong_path && branch.is_branch)
     branch.branch_mispredicted = true;
+  if(target.is_wrong_path && !branch.is_wrong_path)
+    branch.before_wrong_path = true;
   return branch;
 }
 

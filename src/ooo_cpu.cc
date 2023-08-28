@@ -31,7 +31,7 @@
 #include "trace_instruction.h" // for REG_STACK_POINTER, REG_FLAGS, REG_INS...
 #include "util/span.h"
 
-//#define BGODALA 0
+#define BGODALA 0
 
 std::chrono::seconds elapsed_time();
 
@@ -113,10 +113,46 @@ void O3_CPU::initialize_instruction()
   auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
 
 
-  if(fetch_instr_id == retire_instr_id){
+  //if(fetch_instr_id == retire_instr_id){
+  if(fetch_instr_id == exec_instr_id){
+
       prev_fetch_block = 0;
       fetch_resume_cycle = current_cycle;
+      while(!input_queue.empty() && input_queue.front().is_wrong_path){
+          auto inst = input_queue.front();
+#ifdef BGODALA
+          fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+#endif
+          input_queue.pop_front();
+      }
+      if(!input_queue.empty() && !input_queue.front().is_wrong_path){
+        in_wrong_path = false;
+        flush_after = 0;
+        //fmt::print("finished flushing\n");
+      }else{
+        //fmt::print("still finished flushing\n");
+      }
   }
+
+  if(flush_after){
+        //fmt::print("flushing\n");
+        while(!input_queue.empty() && input_queue.front().is_wrong_path){
+            auto inst = input_queue.front();
+#ifdef BGODALA
+            fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+#endif
+            input_queue.pop_front();
+        }
+	if(!input_queue.empty() && !input_queue.front().is_wrong_path){
+            in_wrong_path = false;
+	    flush_after = 0;
+            //fmt::print("finished flushing\n");
+	}else{
+            //fmt::print("still finished flushing\n");
+	}
+  }
+
+
 
   //if(in_wrong_path && restart){
   //  //  fmt::print("skip wrong path\n");
@@ -140,7 +176,7 @@ void O3_CPU::initialize_instruction()
         while(!input_queue.empty() && input_queue.front().is_wrong_path){
             auto inst = input_queue.front();
 #ifdef BGODALA
-            fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+            fmt::print("ignore ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
             input_queue.pop_front();
         }
@@ -158,7 +194,7 @@ void O3_CPU::initialize_instruction()
     //auto stop_fetch = do_init_instruction(input_queue.front());
     auto stop_fetch = false;
     #ifdef BGODALA
-    fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+    fmt::print("inserting ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
     #endif
 
     if (in_wrong_path && !inst.is_wrong_path){
@@ -172,6 +208,11 @@ void O3_CPU::initialize_instruction()
     }
 
     if (inst.branch_mispredicted || inst.is_wrong_path){
+	
+	//if(inst.branch_msipredicted && inst.branch != BRANCH_CONDITIONAL){
+        //    inst.branch_prediction = true;	
+	//}
+
         in_wrong_path = true;
 	restart = false;
 	if(!enable_wrong_path){
@@ -180,7 +221,13 @@ void O3_CPU::initialize_instruction()
 	}
     }
 
-    if(!inst.is_wrong_path){
+    if(inst.branch_taken){
+        //fmt::print("taken branch found at ip: {:#x}\n", inst.ip);
+        stop_fetch = true;
+    }
+
+    if(inst.before_wrong_path){
+        fmt::print("before wrong path instr_id {}\n", inst.instr_id);
         fetch_instr_id = inst.instr_id;
     }
 
@@ -414,6 +461,7 @@ long O3_CPU::decode_instruction()
                                                          [cycle = current_cycle](const auto& x) { return x.event_cycle <= cycle; });
   long progress{std::distance(window_begin, window_end)};
 
+  auto flushed = 0;
   // Send decoded instructions to dispatch
   std::for_each(window_begin, window_end, [&, this](auto& db_entry) {
     this->do_dib_update(db_entry);
@@ -431,6 +479,9 @@ long O3_CPU::decode_instruction()
         this->fetch_resume_cycle = this->current_cycle + BRANCH_MISPREDICT_PENALTY;
 	prev_fetch_block = 0;
 	restart = true;
+	//fmt::print("flush DECODE_BUFFER and IFETCH_BUFFER here at ip: {:#x}\n", db_entry.ip);
+	flushed = db_entry.instr_id;
+	db_entry.squashed = true;
       }
     }
 
@@ -440,6 +491,22 @@ long O3_CPU::decode_instruction()
 
   std::move(window_begin, window_end, std::back_inserter(DISPATCH_BUFFER));
   DECODE_BUFFER.erase(window_begin, window_end);
+
+  if(flushed){
+        flush_after = flushed;
+#ifdef BGODALA
+	fmt::print("flush DECODE_BUFFER and IFETCH_BUFFER " 
+		   "after instr_id: {} DECODE_BUFFER size {} "
+		   "IFETCH_BUFFER size {}\n", flushed, 
+		   DECODE_BUFFER.size(), IFETCH_BUFFER.size());
+	for_each(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER),
+			[](auto inst){fmt::print("ip: {:#x} instr_id: {} wp: {}\n", 
+				inst.ip, inst.instr_id, inst.is_wrong_path);
+			});
+#endif
+	DECODE_BUFFER.clear();
+	IFETCH_BUFFER.clear();
+  }
 
   return progress;
 }
@@ -669,14 +736,17 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
     auto begin = std::begin(reg_producers.at(dreg));
     auto end = std::end(reg_producers.at(dreg));
     auto elem = std::find_if(begin, end, [id = instr.instr_id](ooo_model_instr& x) { return x.instr_id == id; });
-    assert(elem != end);
-    reg_producers.at(dreg).erase(elem);
+    if(elem != end){
+      reg_producers.at(dreg).erase(elem);
+    }
   }
 
   instr.completed = true;
 
   for (ooo_model_instr& dependent : instr.registers_instrs_depend_on_me) {
     dependent.num_reg_dependent--;
+
+
     assert(dependent.num_reg_dependent >= 0);
 
     if (dependent.num_reg_dependent == 0) {
@@ -684,12 +754,39 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
     }
   }
 
-  if (instr.branch_mispredicted && !instr.is_wrong_path) {
+  if (instr.branch_mispredicted && !instr.is_wrong_path && !instr.squashed) {
     fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
     prev_fetch_block = 0;
     restart = true;
 
     //fmt::print("C[EXEC]: cycle {} ip: {:x} branch {}\n", current_cycle, instr.ip, instr.branch); 
+    fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {}\n", current_cycle, instr.instr_id, ROB.size());
+  }
+
+      if(!instr.is_wrong_path && instr.before_wrong_path &&  !instr.squashed && instr.instr_id == fetch_instr_id){
+        fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {} fetch_instr_id {}\n", current_cycle, instr.instr_id, ROB.size(), fetch_instr_id);
+        instr.squashed = true;
+
+        for_each(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { 
+            	    if(x.instr_id > id) { 
+            	      std::cout <<std::flush;
+            	      assert(x.is_wrong_path && "Must be wrong path instruction\n");
+            	      x.scheduled = true; 
+            	      x.executed = true; 
+            	      //do_complete_execution(x);
+            	      //x.completed = true;
+            	      fmt::print("FLUSH instr_id: {} is_wrong_path: {}\n", x.instr_id, x.is_wrong_path);  
+            	      std::cout <<std::flush;
+            	    }; } );
+        //if (it != std::end(ROB)){
+        //    ROB.erase(std::next(it), std::end(ROB));
+        //}
+        //flush ROB, DISPATH_BUFFER, DECODE_BUFFER, IFETCH_BUFFER
+        DISPATCH_BUFFER.clear();
+        DECODE_BUFFER.clear();
+        IFETCH_BUFFER.clear();
+
+        exec_instr_id = instr.instr_id;
   }
 }
 
@@ -717,7 +814,7 @@ long O3_CPU::handle_memory_return()
     //while (l1i_bw > 0) {
     //  auto fetched = std::find_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER),
     //                              [fid = l1i_entry.instr_id](const auto& x) { return x.fetch_instr_id == fid && !x.fetch_completed; });
-    for (auto fetched = std::begin(IFETCH_BUFFER) ; fetched != std::end(IFETCH_BUFFER); fetched++){ 
+    for (auto fetched = std::begin(IFETCH_BUFFER) ; fetched != std::end(IFETCH_BUFFER); fetched++){
 
       //if(fetched->fetch_instr_id > l1i_entry.instr_id)
       //  continue;
@@ -862,10 +959,10 @@ void O3_CPU::print_deadlock()
   auto instr_pack = [](const auto& entry) {
     return std::tuple{entry.instr_id,   entry.fetch_issued, entry.fetch_completed,    entry.scheduled,
                       entry.executed,   entry.completed,    +entry.num_reg_dependent, entry.num_mem_ops() - entry.completed_mem_ops,
-                      entry.event_cycle};
+                      entry.event_cycle, entry.is_wrong_path};
   };
   std::string_view instr_fmt{
-      "instr_id: {} fetch_issued: {} fetch_completed: {} scheduled: {} executed: {} completed: {} num_reg_dependent: {} num_mem_ops: {} event: {}"};
+      "instr_id: {} fetch_issued: {} fetch_completed: {} scheduled: {} executed: {} completed: {} num_reg_dependent: {} num_mem_ops: {} event: {} wrong_path: {}"};
   champsim::range_print_deadlock(IFETCH_BUFFER, "cpu" + std::to_string(cpu) + "_IFETCH", instr_fmt, instr_pack);
   champsim::range_print_deadlock(DECODE_BUFFER, "cpu" + std::to_string(cpu) + "_DECODE", instr_fmt, instr_pack);
   champsim::range_print_deadlock(DISPATCH_BUFFER, "cpu" + std::to_string(cpu) + "_DISPATCH", instr_fmt, instr_pack);

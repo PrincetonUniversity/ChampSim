@@ -64,6 +64,8 @@ struct ooo_model_instr {
   bool branch_taken = false;
   bool branch_prediction = false;
   bool branch_mispredicted = false; // A branch can be mispredicted even if the direction prediction is correct when the predicted target is not correct
+  bool before_wrong_path = false;
+  bool squashed = false;
 
   bool is_non_spec = false;
   bool is_serializing = false;

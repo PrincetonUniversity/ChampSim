@@ -42,7 +42,7 @@ reverse = $(if $(wordlist 2,2,$(1)),$(call reverse,$(wordlist 2,$(words $(1)),$(
 
 # All .o files should be made like .cc files
 $(objs):
-	$(CXX) $(call reverse, $(addprefix @,$(filter %.options, $^))) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $(filter %.cc, $^)
+	$(CXX) $(call reverse, $(addprefix @,$(filter %.options, $^))) $(CPPFLAGS) $(CXXFLAGS)  -c -o $@ $(filter %.cc, $^)
 
 # Link test executable
 $(test_main_name): CXXFLAGS += -g3 -Og -Wconversion
