@@ -232,9 +232,12 @@ void O3_CPU::initialize_instruction()
 
 void O3_CPU::update_branch_stats(ooo_model_instr& instr)
 {
-  if(instr.is_branch && !instr.is_wrong_path && instr.branch_mispredicted){
+  if(instr.is_branch && !instr.is_wrong_path){
+    sim_stats.total_branch_types.at(instr.branch)++;
+    if(instr.branch_mispredicted){
       sim_stats.total_rob_occupancy_at_branch_mispredict += std::size(ROB);
       sim_stats.branch_type_misses.at(instr.branch)++;
+    }
   }
 
 }
