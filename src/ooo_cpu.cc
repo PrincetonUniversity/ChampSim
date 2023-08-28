@@ -220,6 +220,8 @@ void O3_CPU::initialize_instruction()
       instrs_to_read_this_cycle = 0;
     }
 
+    update_branch_stats(input_queue.front());
+
     // Add to IFETCH_BUFFER
     IFETCH_BUFFER.push_back(input_queue.front());
     input_queue.pop_front();
@@ -228,6 +230,14 @@ void O3_CPU::initialize_instruction()
   }
 }
 
+void O3_CPU::update_branch_stats(ooo_model_instr& instr)
+{
+  if(instr.is_branch && !instr.is_wrong_path && instr.branch_mispredicted){
+      sim_stats.total_rob_occupancy_at_branch_mispredict += std::size(ROB);
+      sim_stats.branch_type_misses.at(instr.branch)++;
+  }
+
+}
 namespace
 {
 void do_stack_pointer_folding(ooo_model_instr& arch_instr)

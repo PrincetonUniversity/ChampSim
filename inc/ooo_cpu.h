@@ -189,6 +189,7 @@ public:
 
   bool do_init_instruction(ooo_model_instr& instr);
   bool do_predict_branch(ooo_model_instr& instr);
+  void update_branch_stats(ooo_model_instr& instr);
   void do_check_dib(ooo_model_instr& instr);
   bool do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, std::deque<ooo_model_instr>::iterator end);
   void do_dib_update(const ooo_model_instr& instr);
