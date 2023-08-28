@@ -31,7 +31,7 @@
 #include "trace_instruction.h" // for REG_STACK_POINTER, REG_FLAGS, REG_INS...
 #include "util/span.h"
 
-#define BGODALA 0
+//#define BGODALA 0
 
 std::chrono::seconds elapsed_time();
 
@@ -121,7 +121,7 @@ void O3_CPU::initialize_instruction()
       while(!input_queue.empty() && input_queue.front().is_wrong_path){
           auto inst = input_queue.front();
 #ifdef BGODALA
-          fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+          fmt::print("exec_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
           input_queue.pop_front();
       }
@@ -139,7 +139,7 @@ void O3_CPU::initialize_instruction()
         while(!input_queue.empty() && input_queue.front().is_wrong_path){
             auto inst = input_queue.front();
 #ifdef BGODALA
-            fmt::print("ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
+            fmt::print("decode_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
             input_queue.pop_front();
         }
@@ -207,7 +207,7 @@ void O3_CPU::initialize_instruction()
 	break;
     }
 
-    if (inst.branch_mispredicted || inst.is_wrong_path){
+    if (inst.branch_mispredicted || inst.before_wrong_path){
 	
 	//if(inst.branch_msipredicted && inst.branch != BRANCH_CONDITIONAL){
         //    inst.branch_prediction = true;	
@@ -887,16 +887,16 @@ long O3_CPU::retire_rob()
 	prev_fetch_block = 0;
     }
 
-    if(it->branch_mispredicted && !it->is_wrong_path){
-	#ifdef BGODALA
-        fmt::print("[RESTEER]: ip:{:#x} wrong path: {}\n", it->ip, it->is_wrong_path); 
-        #endif
-        if(fetch_resume_cycle > current_cycle){
-	    fetch_resume_cycle = current_cycle;
-            restart = true;
-	    prev_fetch_block = 0;
-	}
-    }
+    //if(it->branch_mispredicted && !it->is_wrong_path){
+    //    #ifdef BGODALA
+    //    fmt::print("[RESTEER]: ip:{:#x} wrong path: {}\n", it->ip, it->is_wrong_path); 
+    //    #endif
+    //    if(fetch_resume_cycle > current_cycle){
+    //        fetch_resume_cycle = current_cycle;
+    //        restart = true;
+    //        prev_fetch_block = 0;
+    //    }
+    //}
 
     //if(it->is_branch){
     //  //fmt::print("[BTB]: Update ip:{:x} target:{:x} taken:{} type:{}\n", it->ip, it->branch_target, it->branch_taken, it->branch); 
