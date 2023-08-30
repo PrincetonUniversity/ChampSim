@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <cstdio>
+#include <iostream>
 //#include "utils.h"
 //#include "bt9.h"
 //#include "bt9_reader.h"
@@ -18,15 +19,14 @@
 #include "modules.h"
 #include "msl/bits.h"
 #include "msl/fwcounter.h"
+#include <fmt/core.h>
 
 
-namespace tage_base {
 
 #define BORNTICK  1024
 //To get the predictor storage budget on stderr  uncomment the next line
 #define PRINTSIZE
 #include <vector>
-static long long IMLIcount;		// use to monitor the iteration number
 
 #define SC			// 8.2 % if TAGE alone
 #define IMLI			// 0.2 %
@@ -47,90 +47,15 @@ static long long IMLIcount;		// use to monitor the iteration number
 //The three BIAS tables in the SC component
 //We play with the TAGE  confidence here, with the number of the hitting bank
 #define LOGBIAS 8
-static int8_t Bias[(1 << LOGBIAS)];
 #define INDBIAS (((((PC ^(PC >>2))<<1)  ^  (LowConf &(LongestMatchPred!=alttaken))) <<1) +  pred_inter) & ((1<<LOGBIAS) -1)
-static int8_t BiasSK[(1 << LOGBIAS)];
 #define INDBIASSK (((((PC^(PC>>(LOGBIAS-2)))<<1) ^ (HighConf))<<1) +  pred_inter) & ((1<<LOGBIAS) -1)
 
-static int8_t BiasBank[(1 << LOGBIAS)];
 
 #define INDBIASBANK (pred_inter + (((HitBank+1)/4)<<4) + (HighConf<<1) + (LowConf <<2) +((AltBank!=0)<<3)+ ((PC^(PC>>2))<<7)) & ((1<<LOGBIAS) -1)
 
 
 
 //In all th GEHL components, the two tables with the shortest history lengths have only half of the entries.
-
-// IMLI-SIC -> Micro 2015  paper: a big disappointment on  CBP2016 traces
-#ifdef IMLI
-#define LOGINB 8		// 128-entry
-#define INB 1
-static int Im[INB] = { 8 };
-static int8_t IGEHLA[INB][(1 << LOGINB)] = { {0} };
-
-static int8_t *IGEHL[INB];
-
-#define LOGIMNB 9		// 2* 256 -entry
-#define IMNB 2
-
-static int IMm[IMNB] = { 10, 4 };
-static int8_t IMGEHLA[IMNB][(1 << LOGIMNB)] = { {0} };
-
-static int8_t *IMGEHL[IMNB];
-static long long IMHIST[256];
-
-#endif
-
-//global branch GEHL
-#define LOGGNB 10		// 1 1K + 2 * 512-entry tables
-#define GNB 3
-static int Gm[GNB] = { 40, 24, 10 };
-static int8_t GGEHLA[GNB][(1 << LOGGNB)] = { {0} };
-
-static int8_t *GGEHL[GNB];
-
-//variation on global branch history
-#define PNB 3
-#define LOGPNB 9		// 1 1K + 2 * 512-entry tables
-static int Pm[PNB] = { 25, 16, 9 };
-static int8_t PGEHLA[PNB][(1 << LOGPNB)] = { {0} };
-
-static int8_t *PGEHL[PNB];
-
-//first local history
-#define LOGLNB  10		// 1 1K + 2 * 512-entry tables
-#define LNB 3
-static int Lm[LNB] = { 11, 6, 3 };
-static int8_t LGEHLA[LNB][(1 << LOGLNB)] = { {0} };
-
-static int8_t *LGEHL[LNB];
-#define  LOGLOCAL 8
-#define NLOCAL (1<<LOGLOCAL)
-#define INDLOCAL ((PC ^ (PC >>2)) & (NLOCAL-1))
-static long long L_shist[NLOCAL];	//local histories
-
-// second local history
-#define LOGSNB 9		// 1 1K + 2 * 512-entry tables
-#define SNB 3
-static int Sm[SNB] = { 16, 11, 6 };
-static int8_t SGEHLA[SNB][(1 << LOGSNB)] = { {0} };
-
-static int8_t *SGEHL[SNB];
-#define LOGSECLOCAL 4
-#define NSECLOCAL (1<<LOGSECLOCAL)	//Number of second local histories
-#define INDSLOCAL  (((PC ^ (PC >>5))) & (NSECLOCAL-1))
-static long long S_slhist[NSECLOCAL];
-
-//third local history
-#define LOGTNB 10		// 2 * 512-entry tables
-#define TNB 2
-static int Tm[TNB] = { 9, 4 };
-static int8_t TGEHLA[TNB][(1 << LOGTNB)] = { {0} };
-
-static int8_t *TGEHL[TNB];
-#define NTLOCAL 16
-#define INDTLOCAL  (((PC ^ (PC >>(LOGTNB)))) & (NTLOCAL-1))	// different hash for the history
-static long long T_slhist[NTLOCAL];
-
 
 
 
@@ -147,24 +72,10 @@ static long long T_slhist[NTLOCAL];
 #define LOGSIZEUP 0
 #endif
 #define LOGSIZEUPS  (LOGSIZEUP/2)
-static int updatethreshold;
-static int Pupdatethreshold[(1 << LOGSIZEUP)];	//size is fixed by LOGSIZEUP
 #define INDUPD (PC ^ (PC >>2)) & ((1 << LOGSIZEUP) - 1)
 #define INDUPDS ((PC ^ (PC >>2)) & ((1 << (LOGSIZEUPS)) - 1))
-static int8_t WG[(1 << LOGSIZEUPS)];
-static int8_t WL[(1 << LOGSIZEUPS)];
-static int8_t WS[(1 << LOGSIZEUPS)];
-static int8_t WT[(1 << LOGSIZEUPS)];
-static int8_t WP[(1 << LOGSIZEUPS)];
-static int8_t WI[(1 << LOGSIZEUPS)];
-static int8_t WIM[(1 << LOGSIZEUPS)];
-static int8_t WB[(1 << LOGSIZEUPS)];
 #define EWIDTH 6
-static int LSUM;
 
-// The two counters used to choose between TAGE and SC on Low Conf SC
-static int8_t FirstH, SecondH;
-static bool MedConf;			// is the TAGE prediction medium confidence
 
 
 #define CONFWIDTH 7		//for the counters in the choser
@@ -268,7 +179,6 @@ public:
 #define NBANKLOW 10		// number of banks in the shared bank-interleaved for the low history lengths
 #define NBANKHIGH 20		// number of banks in the shared bank-interleaved for the  history lengths
 
-static int SizeTable[NHIST + 1];
 
 
 #define BORN 13			// below BORN in the table for low history lengths, >= BORN in the table for high history lengths,
@@ -287,9 +197,6 @@ static int SizeTable[NHIST + 1];
 #define TBITS 8			//minimum width of the tags  (low history lengths), +4 for high history lengths
 
 
-static bool NOSKIP[NHIST + 1];		// to manage the associativity for different history lengths
-static bool LowConf;
-static bool HighConf;
 
 
 
@@ -305,40 +212,9 @@ static bool HighConf;
 
 //the counter(s) to chose between longest match and alternate prediction on TAGE when weak counters
 #define LOGSIZEUSEALT 4
-static bool AltConf;			// Confidence on the alternate prediction
 #define ALTWIDTH 5
 #define SIZEUSEALT  (1<<(LOGSIZEUSEALT))
 #define INDUSEALT (((((HitBank-1)/8)<<1)+AltConf) % (SIZEUSEALT-1))
-static int8_t use_alt_on_na[SIZEUSEALT];
-//very marginal benefit
-static long long GHIST;
-static int8_t BIM;
-
-static int TICK;			// for the reset of the u counter
-static uint8_t ghist[HISTBUFFERLENGTH];
-static int ptghist;
-static long long phist;		//path history
-static folded_history ch_i[NHIST + 1];	//utility for computing TAGE indices
-static folded_history ch_t[2][NHIST + 1];	//utility for computing TAGE tags
-
-//For the TAGE predictor
-static bentry *btable;			//bimodal TAGE table
-static gentry *gtable[NHIST + 1];	// tagged TAGE tables
-static int m[NHIST + 1];
-static int TB[NHIST + 1];
-static int logg[NHIST + 1];
-
-static int GI[NHIST + 1];		// indexes to the different tables are computed only once  
-static uint GTAG[NHIST + 1];		// tags for the different tables are computed only once  
-static int BI;				// index of the bimodal table
-static bool pred_taken;		// prediction
-static bool alttaken;			// alternate  TAGEprediction
-static bool tage_pred;			// TAGE prediction
-static bool LongestMatchPred;
-static int HitBank;			// longest matching bank
-static int AltBank;			// alternate matching bank
-static int Seed;			// for the pseudo-random number generator
-static bool pred_inter;
 
 
 #ifdef LOOPPREDICTOR
@@ -372,121 +248,14 @@ public:
 
   }
 
+
 };
 
-static lentry *ltable;			//loop predictor table
 //variables for the loop predictor
-static bool predloop;			// loop predictor prediction
-static int LIB;
-static int LI;
-static int LHIT;			//hitting way in the loop predictor
-static int LTAG;			//tag on the loop predictor
-static bool LVALID;			// validity of the loop predictor prediction
-static int8_t WITHLOOP;		// counter to monitor whether or not loop prediction is beneficial
-
-#endif
-
-static int
-predictorsize ()
-{
-  int STORAGESIZE = 0;
-  int inter = 0;
-
-
-  STORAGESIZE +=
-    NBANKHIGH * (1 << (logg[BORN])) * (CWIDTH + UWIDTH + TB[BORN]);
-  STORAGESIZE += NBANKLOW * (1 << (logg[1])) * (CWIDTH + UWIDTH + TB[1]);
-
-  STORAGESIZE += (SIZEUSEALT) * ALTWIDTH;
-  STORAGESIZE += (1 << LOGB) + (1 << (LOGB - HYSTSHIFT));
-  STORAGESIZE += m[NHIST];
-  STORAGESIZE += PHISTWIDTH;
-  STORAGESIZE += 10;		//the TICK counter
-
-  fprintf (stderr, " (TAGE %d) ", STORAGESIZE);
-#ifdef SC
-#ifdef LOOPPREDICTOR
-
-  inter = (1 << LOGL) * (2 * WIDTHNBITERLOOP + LOOPTAG + 4 + 4 + 1);
-  fprintf (stderr, " (LOOP %d) ", inter);
-  STORAGESIZE += inter;
-
-#endif
-
-  inter += WIDTHRES;
-  inter = WIDTHRESP * ((1 << LOGSIZEUP));	//the update threshold counters
-  inter += 3 * EWIDTH * (1 << LOGSIZEUPS);	// the extra weight of the partial sums
-  inter += (PERCWIDTH) * 3 * (1 << (LOGBIAS));
-
-  inter +=
-    (GNB - 2) * (1 << (LOGGNB)) * (PERCWIDTH) +
-    (1 << (LOGGNB - 1)) * (2 * PERCWIDTH);
-  inter += Gm[0];		//global histories for SC
-  inter += (PNB - 2) * (1 << (LOGPNB)) * (PERCWIDTH) +
-    (1 << (LOGPNB - 1)) * (2 * PERCWIDTH);
-//we use phist already counted for these tables
-
-#ifdef LOCALH
-  inter +=
-    (LNB - 2) * (1 << (LOGLNB)) * (PERCWIDTH) +
-    (1 << (LOGLNB - 1)) * (2 * PERCWIDTH);
-  inter += NLOCAL * Lm[0];
-  inter += EWIDTH * (1 << LOGSIZEUPS);
-#ifdef LOCALS
-  inter +=
-    (SNB - 2) * (1 << (LOGSNB)) * (PERCWIDTH) +
-    (1 << (LOGSNB - 1)) * (2 * PERCWIDTH);
-  inter += NSECLOCAL * (Sm[0]);
-  inter += EWIDTH * (1 << LOGSIZEUPS);
-
-#endif
-#ifdef LOCALT
-  inter +=
-    (TNB - 2) * (1 << (LOGTNB)) * (PERCWIDTH) +
-    (1 << (LOGTNB - 1)) * (2 * PERCWIDTH);
-  inter += NTLOCAL * Tm[0];
-  inter += EWIDTH * (1 << LOGSIZEUPS);
-#endif
-
-
-
-
-
-
-
-
 
 #endif
 
 
-
-#ifdef IMLI
-
-  inter += (1 << (LOGINB - 1)) * PERCWIDTH;
-  inter += Im[0];
-
-  inter += IMNB * (1 << (LOGIMNB - 1)) * PERCWIDTH;
-  inter += 2 * EWIDTH * (1 << LOGSIZEUPS);	// the extra weight of the partial sums
-  inter += 256 * IMm[0];
-#endif
-  inter += 2 * CONFWIDTH;	//the 2 counters in the choser
-  STORAGESIZE += inter;
-
-
-  fprintf (stderr, " (SC %d) ", inter);
-#endif
-#ifdef PRINTSIZE
-  fprintf (stderr, " (TOTAL %d bits %d Kbits) ", STORAGESIZE,
-	   STORAGESIZE / 1024);
-  fprintf (stdout, " (TOTAL %d bits %d Kbits) ", STORAGESIZE,
-	   STORAGESIZE / 1024);
-#endif
-
-
-  return (STORAGESIZE);
-
-
-}
 
 
 
@@ -497,10 +266,153 @@ class PREDICTOR
 {
 public:
   int THRES;
+  bentry *btable;			//bimodal TAGE table
+  lentry *ltable;			//loop predictor table
+  gentry *gtable[NHIST + 1];	// tagged TAGE tables
+  int SizeTable[NHIST + 1];
+  bool predloop;			// loop predictor prediction
+  int LIB;
+  int LI;
+  int LHIT;			//hitting way in the loop predictor
+  int LTAG;			//tag on the loop predictor
+  bool LVALID;			// validity of the loop predictor prediction
+  int8_t WITHLOOP;		// counter to monitor whether or not loop prediction is beneficial
+				//
+  //For the TAGE predictor
+  int m[NHIST + 1];
+  int TB[NHIST + 1];
+  int logg[NHIST + 1];
+ 
+  int GI[NHIST + 1];		// indexes to the different tables are computed only once  
+  uint GTAG[NHIST + 1];		// tags for the different tables are computed only once  
+  int BI;				// index of the bimodal table
+  bool pred_taken;		// prediction
+  bool alttaken;			// alternate  TAGEprediction
+  bool tage_pred;			// TAGE prediction
+  bool LongestMatchPred;
+  int HitBank;			// longest matching bank
+  int AltBank;			// alternate matching bank
+  int Seed;			// for the pseudo-random number generator
+  bool pred_inter;
+
+  int TICK;			// for the reset of the u counter
+  uint8_t ghist[HISTBUFFERLENGTH];
+  int ptghist;
+  long long phist;		//path history
+  folded_history ch_i[NHIST + 1];	//utility for computing TAGE indices
+  folded_history ch_t[2][NHIST + 1];	//utility for computing TAGE tags
+
+  long long IMLIcount;		// use to monitor the iteration number
+
+  bool NOSKIP[NHIST + 1];		// to manage the associativity for different history lengths
+  bool LowConf;
+  bool HighConf;
+
+  int8_t use_alt_on_na[SIZEUSEALT];
+  //very marginal benefit
+  long long GHIST;
+  int8_t BIM;
+
+  bool AltConf;			// Confidence on the alternate prediction
+				//
+  // The two counters used to choose between TAGE and SC on Low Conf SC
+  int8_t FirstH, SecondH;
+  bool MedConf;			// is the TAGE prediction medium confidence
+ 
+  int updatethreshold;
+  int Pupdatethreshold[(1 << LOGSIZEUP)];	//size is fixed by LOGSIZEUP
+  
+  int8_t WG[(1 << LOGSIZEUPS)];
+  int8_t WL[(1 << LOGSIZEUPS)];
+  int8_t WS[(1 << LOGSIZEUPS)];
+  int8_t WT[(1 << LOGSIZEUPS)];
+  int8_t WP[(1 << LOGSIZEUPS)];
+  int8_t WI[(1 << LOGSIZEUPS)];
+  int8_t WIM[(1 << LOGSIZEUPS)];
+  int8_t WB[(1 << LOGSIZEUPS)];
+  
+  int LSUM;
+  
+  int8_t Bias[(1 << LOGBIAS)];
+  int8_t BiasSK[(1 << LOGBIAS)];
+  int8_t BiasBank[(1 << LOGBIAS)];
+ 
+// IMLI-SIC -> Micro 2015  paper: a big disappointment on  CBP2016 traces
+#ifdef IMLI
+#define LOGINB 8		// 128-entry
+#define INB 1
+ int Im[INB] = { 8 };
+ int8_t IGEHLA[INB][(1 << LOGINB)] = { {0} };
+
+ int8_t *IGEHL[INB];
+
+#define LOGIMNB 9		// 2* 256 -entry
+#define IMNB 2
+
+ int IMm[IMNB] = { 10, 4 };
+int8_t IMGEHLA[IMNB][(1 << LOGIMNB)] = { {0} };
+
+int8_t *IMGEHL[IMNB];
+long long IMHIST[256];
+
+#endif
+
+//global branch GEHL
+#define LOGGNB 10		// 1 1K + 2 * 512-entry tables
+#define GNB 3
+int Gm[GNB] = { 40, 24, 10 };
+int8_t GGEHLA[GNB][(1 << LOGGNB)] = { {0} };
+
+int8_t *GGEHL[GNB];
+//variation on global branch history
+#define PNB 3
+#define LOGPNB 9		// 1 1K + 2 * 512-entry tables
+int Pm[PNB] = { 25, 16, 9 };
+int8_t PGEHLA[PNB][(1 << LOGPNB)] = { {0} };
+
+int8_t *PGEHL[PNB];
+
+//first local history
+#define LOGLNB  10		// 1 1K + 2 * 512-entry tables
+#define LNB 3
+int Lm[LNB] = { 11, 6, 3 };
+int8_t LGEHLA[LNB][(1 << LOGLNB)] = { {0} };
+
+int8_t *LGEHL[LNB];
+#define  LOGLOCAL 8
+#define NLOCAL (1<<LOGLOCAL)
+#define INDLOCAL ((PC ^ (PC >>2)) & (NLOCAL-1))
+long long L_shist[NLOCAL];	//local histories
+
+// second local history
+#define LOGSNB 9		// 1 1K + 2 * 512-entry tables
+#define SNB 3
+int Sm[SNB] = { 16, 11, 6 };
+int8_t SGEHLA[SNB][(1 << LOGSNB)] = { {0} };
+
+int8_t *SGEHL[SNB];
+#define LOGSECLOCAL 4
+#define NSECLOCAL (1<<LOGSECLOCAL)	//Number of second local histories
+#define INDSLOCAL  (((PC ^ (PC >>5))) & (NSECLOCAL-1))
+long long S_slhist[NSECLOCAL];
+
+//third local history
+#define LOGTNB 10		// 2 * 512-entry tables
+#define TNB 2
+int Tm[TNB] = { 9, 4 };
+int8_t TGEHLA[TNB][(1 << LOGTNB)] = { {0} };
+
+int8_t *TGEHL[TNB];
+#define NTLOCAL 16
+#define INDTLOCAL  (((PC ^ (PC >>(LOGTNB)))) & (NTLOCAL-1))	// different hash for the history
+long long T_slhist[NTLOCAL];
+
+
 
     PREDICTOR (void)
   {
 
+    std::cout <<"Calling PREDICTOR" << std::endl;
     reinit ();
 #ifdef PRINTSIZE
     predictorsize ();
@@ -566,6 +478,7 @@ public:
     for (int i = 2; i <= BORN - 1; i++)
       gtable[i] = gtable[1];
     btable = new bentry[1 << LOGB];
+
 
     for (int i = 1; i <= NHIST; i++)
       {
@@ -820,13 +733,13 @@ public:
 
 // gindex computes a full hash of PC, ghist and phist
   int gindex (unsigned int PC, int bank, long long hist,
-	      folded_history * ch_i)
+	      folded_history * ch_i_)
   {
     int index;
     int M = (m[bank] > PHISTWIDTH) ? PHISTWIDTH : m[bank];
     index =
       PC ^ (PC >> (abs (logg[bank] - bank) + 1))
-      ^ ch_i[bank].comp ^ F (hist, M, bank);
+      ^ ch_i_[bank].comp ^ F (hist, M, bank);
 
     return (index & ((1 << (logg[bank])) - 1));
   }
@@ -1706,8 +1619,8 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
 	if ((MYRANDOM () & 3) == 0)
 	  for (int i = 0; i < 4; i++)
 	    {
-	      int LHIT = (X + i) & 3;
-	      int index = (LI ^ ((LIB >> LHIT) << 2)) + LHIT;
+	      int LHIT_ = (X + i) & 3;
+	      int index = (LI ^ ((LIB >> LHIT_) << 2)) + LHIT_;
 	      if (ltable[index].age == 0)
 		{
 		  ltable[index].dir = !Taken;
@@ -1727,14 +1640,117 @@ int T = (PC ^ (phist & ((1 << m[BORN]) - 1))) % NBANKHIGH;
       }
   }
 #endif
+  int
+  predictorsize ()
+  {
+    int STORAGESIZE = 0;
+    int inter = 0;
+  
+  
+    STORAGESIZE +=
+      NBANKHIGH * (1 << (logg[BORN])) * (CWIDTH + UWIDTH + TB[BORN]);
+    STORAGESIZE += NBANKLOW * (1 << (logg[1])) * (CWIDTH + UWIDTH + TB[1]);
+  
+    STORAGESIZE += (SIZEUSEALT) * ALTWIDTH;
+    STORAGESIZE += (1 << LOGB) + (1 << (LOGB - HYSTSHIFT));
+    STORAGESIZE += m[NHIST];
+    STORAGESIZE += PHISTWIDTH;
+    STORAGESIZE += 10;		//the TICK counter
+  
+    fprintf (stderr, " (TAGE %d) ", STORAGESIZE);
+  #ifdef SC
+  #ifdef LOOPPREDICTOR
+  
+    inter = (1 << LOGL) * (2 * WIDTHNBITERLOOP + LOOPTAG + 4 + 4 + 1);
+    fprintf (stderr, " (LOOP %d) ", inter);
+    STORAGESIZE += inter;
+  
+  #endif
+  
+    inter += WIDTHRES;
+    inter = WIDTHRESP * ((1 << LOGSIZEUP));	//the update threshold counters
+    inter += 3 * EWIDTH * (1 << LOGSIZEUPS);	// the extra weight of the partial sums
+    inter += (PERCWIDTH) * 3 * (1 << (LOGBIAS));
+  
+    inter +=
+      (GNB - 2) * (1 << (LOGGNB)) * (PERCWIDTH) +
+      (1 << (LOGGNB - 1)) * (2 * PERCWIDTH);
+    inter += Gm[0];		//global histories for SC
+    inter += (PNB - 2) * (1 << (LOGPNB)) * (PERCWIDTH) +
+      (1 << (LOGPNB - 1)) * (2 * PERCWIDTH);
+  //we use phist already counted for these tables
+  
+  #ifdef LOCALH
+    inter +=
+      (LNB - 2) * (1 << (LOGLNB)) * (PERCWIDTH) +
+      (1 << (LOGLNB - 1)) * (2 * PERCWIDTH);
+    inter += NLOCAL * Lm[0];
+    inter += EWIDTH * (1 << LOGSIZEUPS);
+  #ifdef LOCALS
+    inter +=
+      (SNB - 2) * (1 << (LOGSNB)) * (PERCWIDTH) +
+      (1 << (LOGSNB - 1)) * (2 * PERCWIDTH);
+    inter += NSECLOCAL * (Sm[0]);
+    inter += EWIDTH * (1 << LOGSIZEUPS);
+  
+  #endif
+  #ifdef LOCALT
+    inter +=
+      (TNB - 2) * (1 << (LOGTNB)) * (PERCWIDTH) +
+      (1 << (LOGTNB - 1)) * (2 * PERCWIDTH);
+    inter += NTLOCAL * Tm[0];
+    inter += EWIDTH * (1 << LOGSIZEUPS);
+  #endif
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  #endif
+  
+  
+  
+  #ifdef IMLI
+  
+    inter += (1 << (LOGINB - 1)) * PERCWIDTH;
+    inter += Im[0];
+  
+    inter += IMNB * (1 << (LOGIMNB - 1)) * PERCWIDTH;
+    inter += 2 * EWIDTH * (1 << LOGSIZEUPS);	// the extra weight of the partial sums
+    inter += 256 * IMm[0];
+  #endif
+    inter += 2 * CONFWIDTH;	//the 2 counters in the choser
+    STORAGESIZE += inter;
+  
+  
+    fprintf (stderr, " (SC %d) ", inter);
+  #endif
+  #ifdef PRINTSIZE
+    fprintf (stderr, " (TOTAL %d bits %d Kbits) ", STORAGESIZE,
+  	   STORAGESIZE / 1024);
+    fprintf (stdout, " (TOTAL %d bits %d Kbits) ", STORAGESIZE,
+  	   STORAGESIZE / 1024);
+  #endif
+  
+  
+    return (STORAGESIZE);
+  
+  
+  }
 };
-}
+
 
 
 struct tage_sc_l : champsim::modules::branch_predictor {
   using branch_predictor::branch_predictor;
   bool predict_branch(uint64_t pc);
   void last_branch_result(uint64_t pc, uint64_t branch_target, uint8_t taken, uint8_t branch_type);
+  PREDICTOR tage;
+
 };
 
 
