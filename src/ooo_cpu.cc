@@ -183,7 +183,7 @@ bool O3_CPU::do_predict_branch(ooo_model_instr& arch_instr)
       stop_fetch = arch_instr.branch_taken; // if correctly predicted taken, then we can't fetch anymore instructions this cycle
     }
 
-    //impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
+    impl_update_btb(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
     impl_last_branch_result(arch_instr.ip, arch_instr.branch_target, arch_instr.branch_taken, arch_instr.branch);
   }
 
@@ -691,7 +691,7 @@ long O3_CPU::retire_rob()
 
     if(it->is_branch){
       //fmt::print("[BTB]: Update ip:{:x} target:{:x} taken:{} type:{}\n", it->ip, it->branch_target, it->branch_taken, it->branch); 
-      impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
+      //impl_update_btb(it->ip, it->branch_target, it->branch_taken, it->branch);
       //impl_last_branch_result(it->ip, it->branch_target, it->branch_taken, it->branch);
     }
 

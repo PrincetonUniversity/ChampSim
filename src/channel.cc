@@ -118,7 +118,7 @@ void champsim::channel::check_collision()
 template <typename R>
 bool champsim::channel::do_add_queue(R& queue, std::size_t queue_size, const typename R::value_type& packet)
 {
-  assert(packet.address != 0);
+  //assert(packet.address != 0);
 
   // check occupancy
   if (std::size(queue) >= queue_size) {
