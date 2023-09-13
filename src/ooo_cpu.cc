@@ -114,11 +114,13 @@ void O3_CPU::initialize_instruction()
 
 
   //if(fetch_instr_id == retire_instr_id){
-  if(fetch_instr_id == exec_instr_id){
+  if(fetch_instr_id && fetch_instr_id == exec_instr_id){
 
       prev_fetch_block = 0;
-      fetch_resume_cycle = current_cycle;
+      fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
       while(!input_queue.empty() && input_queue.front().is_wrong_path){
+	  sim_stats.wrong_path_insts++;
+          sim_stats.wrong_path_skipped++;
           auto inst = input_queue.front();
 #ifdef BGODALA
           fmt::print("exec_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
@@ -128,6 +130,7 @@ void O3_CPU::initialize_instruction()
       if(!input_queue.empty() && !input_queue.front().is_wrong_path){
         in_wrong_path = false;
         flush_after = 0;
+	fetch_instr_id = 0;
         //fmt::print("finished flushing\n");
       }else{
         //fmt::print("still finished flushing\n");
@@ -137,6 +140,8 @@ void O3_CPU::initialize_instruction()
   if(flush_after){
         //fmt::print("flushing\n");
         while(!input_queue.empty() && input_queue.front().is_wrong_path){
+	    sim_stats.wrong_path_insts++;
+            sim_stats.wrong_path_skipped++;
             auto inst = input_queue.front();
 #ifdef BGODALA
             fmt::print("decode_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
@@ -157,6 +162,8 @@ void O3_CPU::initialize_instruction()
 
       if(!enable_wrong_path){
         while(!input_queue.empty() && input_queue.front().is_wrong_path){
+	    sim_stats.wrong_path_insts++;
+            sim_stats.wrong_path_skipped++;
             auto inst = input_queue.front();
 #ifdef BGODALA
             fmt::print("ignore ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
@@ -173,6 +180,7 @@ void O3_CPU::initialize_instruction()
     //}
 
     auto inst = input_queue.front();
+  
 
     //auto stop_fetch = do_init_instruction(input_queue.front());
     auto stop_fetch = false;
@@ -190,17 +198,22 @@ void O3_CPU::initialize_instruction()
 	break;
     }
 
-    if (inst.branch_mispredicted || inst.before_wrong_path){
-	
-	//if(inst.branch_msipredicted && inst.branch != BRANCH_CONDITIONAL){
-        //    inst.branch_prediction = true;	
-	//}
+    if(enable_wrong_path){
+        if (inst.branch_mispredicted || inst.before_wrong_path){
+            
+            //if(inst.branch_msipredicted && inst.branch != BRANCH_CONDITIONAL){
+            //    inst.branch_prediction = true;	
+            //}
 
-        in_wrong_path = true;
-	restart = false;
-	if(!enable_wrong_path){
+            in_wrong_path = true;
+            restart = false;
+        }
+    }else{
+	if(inst.branch_mispredicted){
+          in_wrong_path = false;
 	  stop_fetch = true;
           fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
+          fetch_instr_id = inst.instr_id;
 	}
     }
 
@@ -213,12 +226,17 @@ void O3_CPU::initialize_instruction()
 #ifdef BGODALA
         fmt::print("before wrong path instr_id {}\n", inst.instr_id);
 #endif
-        fetch_instr_id = inst.instr_id;
+	if(enable_wrong_path){
+            fetch_instr_id = inst.instr_id;
+	}
     }
 
     if (stop_fetch) {
       instrs_to_read_this_cycle = 0;
     }
+
+    if(inst.is_wrong_path)
+        sim_stats.wrong_path_insts++;
 
     update_branch_stats(input_queue.front());
 
@@ -469,8 +487,9 @@ long O3_CPU::decode_instruction()
       // These branches detect the misprediction at decode
       if ((db_entry.branch == BRANCH_DIRECT_JUMP) 
           || (db_entry.branch == BRANCH_DIRECT_CALL)
-          || (((db_entry.branch == BRANCH_CONDITIONAL) || (db_entry.branch == BRANCH_OTHER)) 
-		  && db_entry.branch_taken == db_entry.branch_prediction)) {
+        //  || (((db_entry.branch == BRANCH_CONDITIONAL) || (db_entry.branch == BRANCH_OTHER)) 
+	//	  && db_entry.branch_taken == db_entry.branch_prediction)) {
+      ){
         // clear the branch_mispredicted bit so we don't attempt to resume fetch again at execute
         //db_entry.branch_mispredicted = 0;
         // pay misprediction penalty

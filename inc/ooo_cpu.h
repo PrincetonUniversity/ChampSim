@@ -70,6 +70,8 @@ struct cpu_stats {
   long long end_instrs = 0;
   uint64_t end_cycles = 0;
   uint64_t total_rob_occupancy_at_branch_mispredict = 0;
+  uint64_t wrong_path_skipped = 0;
+  uint64_t wrong_path_insts = 0;
 
   std::array<long long, 8> total_branch_types = {};
   std::array<long long, 8> branch_type_misses = {};
