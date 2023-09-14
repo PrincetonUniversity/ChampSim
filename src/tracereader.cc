@@ -32,7 +32,7 @@ uint64_t tracereader::instr_unique_id = 0; // NOLINT(cppcoreguidelines-avoid-non
 ooo_model_instr apply_branch_target(ooo_model_instr branch, const ooo_model_instr& target)
 {
   branch.branch_target = (branch.is_branch && branch.branch_taken) ? target.ip : 0;
-  if(target.is_wrong_path && branch.is_branch)
+  if(target.is_wrong_path && branch.is_branch && !branch.is_wrong_path)
     branch.branch_mispredicted = true;
   if(target.is_wrong_path && !branch.is_wrong_path)
     branch.before_wrong_path = true;

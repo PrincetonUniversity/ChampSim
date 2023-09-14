@@ -209,7 +209,7 @@ void O3_CPU::initialize_instruction()
             restart = false;
         }
     }else{
-	if(inst.branch_mispredicted){
+	if(inst.branch_mispredicted || inst.before_wrong_path){
           in_wrong_path = false;
 	  stop_fetch = true;
           fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
@@ -477,7 +477,7 @@ long O3_CPU::decode_instruction()
                                                          [cycle = current_cycle](const auto& x) { return x.event_cycle <= cycle; });
   long progress{std::distance(window_begin, window_end)};
 
-  auto flushed = 0;
+  uint64_t flushed = 0;
   // Send decoded instructions to dispatch
   std::for_each(window_begin, window_end, [&, this](auto& db_entry) {
     this->do_dib_update(db_entry);
@@ -506,6 +506,9 @@ long O3_CPU::decode_instruction()
     db_entry.event_cycle = this->current_cycle + (this->warmup ? 0 : this->DISPATCH_LATENCY);
   });
 
+  if(flushed){
+    window_end = find_if(std::begin(DECODE_BUFFER), std::end(DECODE_BUFFER), [id = flushed](auto &x){ return id == x.instr_id;});
+  }
   std::move(window_begin, window_end, std::back_inserter(DISPATCH_BUFFER));
   DECODE_BUFFER.erase(window_begin, window_end);
 
@@ -634,7 +637,7 @@ void O3_CPU::do_memory_scheduling(ooo_model_instr& instr)
   for (auto& smem : instr.source_memory) {
     auto q_entry = std::find_if_not(std::begin(LQ), std::end(LQ), [](const auto& lq_entry) { return lq_entry.has_value(); });
     assert(q_entry != std::end(LQ));
-    q_entry->emplace(instr.instr_id, smem, instr.ip, instr.asid); // add it to the load queue
+    q_entry->emplace(instr.instr_id, smem, instr.ip, instr.asid, instr.is_wrong_path); // add it to the load queue
 
     // Check for forwarding
     auto sq_it = std::max_element(std::begin(SQ), std::end(SQ), [smem](const auto& lhs, const auto& rhs) {
@@ -658,7 +661,7 @@ void O3_CPU::do_memory_scheduling(ooo_model_instr& instr)
 
   // store
   for (auto& dmem : instr.destination_memory) {
-    SQ.emplace_back(instr.instr_id, dmem, instr.ip, instr.asid); // add it to the store queue
+    SQ.emplace_back(instr.instr_id, dmem, instr.ip, instr.asid, instr.is_wrong_path); // add it to the store queue
   }
 
   if constexpr (champsim::debug_print) {
@@ -671,7 +674,8 @@ long O3_CPU::operate_lsq()
 {
   auto store_bw = SQ_WIDTH;
 
-  const auto complete_id = std::empty(ROB) ? std::numeric_limits<uint64_t>::max() : ROB.front().instr_id;
+  //const auto complete_id = std::empty(ROB) ? std::numeric_limits<uint64_t>::max() : ROB.front().instr_id;
+  const auto complete_id = std::empty(ROB) ? 0 : ROB.front().instr_id;
   auto do_complete = [cycle = current_cycle, complete_id, this](const auto& x) {
     return x.instr_id < complete_id && x.event_cycle <= cycle && this->do_complete_store(x);
   };
@@ -726,6 +730,12 @@ void O3_CPU::do_finish_store(const LSQ_ENTRY& sq_entry)
 
 bool O3_CPU::do_complete_store(const LSQ_ENTRY& sq_entry)
 {
+  if(sq_entry.is_wrong_path){
+    print_deadlock();
+    std::cout <<std::flush;
+  }
+  assert(!sq_entry.is_wrong_path && "Do not issue store for wrong path entry\n");
+
   CacheBus::request_type data_packet;
   data_packet.v_address = sq_entry.virtual_address;
   data_packet.instr_id = sq_entry.instr_id;
@@ -788,7 +798,7 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 #endif
   }
 
-      if(!instr.is_wrong_path && instr.before_wrong_path &&  !instr.squashed && instr.instr_id == fetch_instr_id){
+      if(!instr.is_wrong_path && (instr.before_wrong_path || instr.branch_mispredicted)  &&  !instr.squashed && instr.instr_id == fetch_instr_id){
 #ifdef BGODALA
         fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {} fetch_instr_id {}\n", current_cycle, instr.instr_id, ROB.size(), fetch_instr_id);
 #endif
@@ -826,7 +836,10 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 	} );
 	auto sq_it_squash_begin = find_if(std::begin(SQ), std::end(SQ), [id = instr.instr_id](auto &x){ return x.instr_id > id;});
 	if (sq_it_squash_begin != SQ.end()){
-	    //for_each(sq_it_squash_begin, std::end(SQ), [](auto &x) { fmt::print("Erasing SQ entry instr_id {} \n", x.instr_id); });
+	    for_each(sq_it_squash_begin, std::end(SQ), [](auto &x) { 
+			    //fmt::print("Erasing SQ entry instr_id {} \n", x.instr_id);
+			    assert(x.is_wrong_path && "This should be wrong path entry");
+			    });
 	    SQ.erase(sq_it_squash_begin, std::end(SQ));
 	}
 
@@ -834,10 +847,12 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 			if( x->instr_id > id) 
 			{
 			  //fmt::print("Erasing LQ entry instr_id {} \n", x->instr_id);
+			  assert(x->is_wrong_path && "This should be wrong path entry\n");
 			  x.reset();
 			} 
 		});
         auto rob_it = find_if(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { return x.instr_id > id;});
+	
         //if (rob_it != std::end(ROB)){
         //    ROB.erase(rob_it, std::end(ROB));
         //}
@@ -937,6 +952,12 @@ long O3_CPU::retire_rob()
   auto it = retire_begin;
   while (it != retire_end){
 
+    if(it->branch_mispredicted || it->before_wrong_path){
+	if(!it->squashed){
+	    print_deadlock();
+	}
+          assert(it->squashed && "This should have been squashed\n");
+    }
     //for (auto& sq_entry : SQ) {
     //  if (sq_entry.instr_id == it->instr_id) {
     //    //if(!it->is_wrong_path){
@@ -1042,24 +1063,26 @@ void O3_CPU::print_deadlock()
     if (entry->producer_id != std::numeric_limits<uint64_t>::max()) {
       depend_id = std::to_string(entry->producer_id);
     }
-    return std::tuple{entry->instr_id, entry->virtual_address, entry->fetch_issued, entry->event_cycle, depend_id};
+    return std::tuple{entry->instr_id, entry->virtual_address, entry->fetch_issued, entry->event_cycle, depend_id, entry->is_wrong_path};
   };
-  std::string_view lq_fmt{"instr_id: {} address: {:#x} fetch_issued: {} event_cycle: {} waits on {}"};
+  std::string_view lq_fmt{"instr_id: {} address: {:#x} fetch_issued: {} event_cycle: {} waits on {} wrong_path: {}"};
 
   auto sq_pack = [](const auto& entry) {
     std::vector<uint64_t> depend_ids;
     std::transform(std::begin(entry.lq_depend_on_me), std::end(entry.lq_depend_on_me), std::back_inserter(depend_ids),
                    [](const std::optional<LSQ_ENTRY>& lq_entry) { return lq_entry->producer_id; });
-    return std::tuple{entry.instr_id, entry.virtual_address, entry.fetch_issued, entry.event_cycle, depend_ids};
+    return std::tuple{entry.instr_id, entry.virtual_address, entry.fetch_issued, entry.event_cycle, depend_ids, entry.is_wrong_path};
   };
-  std::string_view sq_fmt{"instr_id: {} address: {:#x} fetch_issued: {} event_cycle: {} LQ waiting: {}"};
+  std::string_view sq_fmt{"instr_id: {} address: {:#x} fetch_issued: {} event_cycle: {} LQ waiting: {} wrong_path: {}"};
   champsim::range_print_deadlock(LQ, "cpu" + std::to_string(cpu) + "_LQ", lq_fmt, lq_pack);
   champsim::range_print_deadlock(SQ, "cpu" + std::to_string(cpu) + "_SQ", sq_fmt, sq_pack);
+
+  std::cout << std::flush;
 }
 // LCOV_EXCL_STOP
 
-LSQ_ENTRY::LSQ_ENTRY(uint64_t id, uint64_t addr, uint64_t local_ip, std::array<uint8_t, 2> local_asid)
-    : instr_id(id), virtual_address(addr), ip(local_ip), asid(local_asid)
+LSQ_ENTRY::LSQ_ENTRY(uint64_t id, uint64_t addr, uint64_t local_ip, std::array<uint8_t, 2> local_asid, bool is_wrong_path_)
+    : instr_id(id), virtual_address(addr), ip(local_ip), asid(local_asid), is_wrong_path(is_wrong_path_)
 {
 }
 
