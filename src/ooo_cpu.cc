@@ -853,9 +853,9 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 		});
         auto rob_it = find_if(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { return x.instr_id > id;});
 	
-        //if (rob_it != std::end(ROB)){
-        //    ROB.erase(rob_it, std::end(ROB));
-        //}
+        if (rob_it != std::end(ROB)){
+            ROB.erase(rob_it, std::end(ROB));
+        }
         //flush ROB, DISPATH_BUFFER, DECODE_BUFFER, IFETCH_BUFFER
         DISPATCH_BUFFER.clear();
         DECODE_BUFFER.clear();
