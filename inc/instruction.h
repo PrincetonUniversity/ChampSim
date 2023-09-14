@@ -58,7 +58,7 @@ inline constexpr std::array branch_type_names{"BRANCH_DIRECT_JUMP"sv, "BRANCH_IN
 struct ooo_model_instr {
   uint64_t instr_id = 0;
   uint64_t ip = 0;
-  uint64_t event_cycle = 0;
+  uint64_t event_cycle = std::numeric_limits<uint64_t>::max();
 
   bool is_branch = false;
   bool branch_taken = false;

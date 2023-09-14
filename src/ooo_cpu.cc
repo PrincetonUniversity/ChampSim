@@ -711,11 +711,16 @@ void O3_CPU::do_finish_store(const LSQ_ENTRY& sq_entry)
 
   // Release dependent loads
   for (std::optional<LSQ_ENTRY>& dependent : sq_entry.lq_depend_on_me) {
-    assert(dependent.has_value()); // LQ entry is still allocated
-    assert(dependent->producer_id == sq_entry.instr_id);
+    if(!dependent.has_value()){
+        continue;
+    }
+    //assert(dependent.has_value()); // LQ entry is still allocated
+    //assert(dependent->producer_id == sq_entry.instr_id);
 
-    dependent->finish(std::begin(ROB), std::end(ROB));
-    dependent.reset();
+    if(dependent->producer_id == sq_entry.instr_id){
+        dependent->finish(std::begin(ROB), std::end(ROB));
+        dependent.reset();
+    }
   }
 }
 
@@ -749,6 +754,7 @@ bool O3_CPU::execute_load(const LSQ_ENTRY& lq_entry)
 
 void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 {
+
   for (auto dreg : instr.destination_registers) {
     auto begin = std::begin(reg_producers.at(dreg));
     auto end = std::end(reg_producers.at(dreg));
@@ -795,14 +801,45 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
             	      x.scheduled = true; 
             	      x.executed = true; 
             	      //do_complete_execution(x);
-            	      //x.completed = true;
+            	      x.completed = true;
 #ifdef BGODALA
             	      fmt::print("FLUSH instr_id: {} is_wrong_path: {}\n", x.instr_id, x.is_wrong_path);  
 #endif
             	      std::cout <<std::flush;
-            	    }; } );
-        //if (it != std::end(ROB)){
-        //    ROB.erase(std::next(it), std::end(ROB));
+                      for (auto dreg : x.destination_registers) {
+                        auto begin = std::begin(reg_producers.at(dreg));
+                        auto end = std::end(reg_producers.at(dreg));
+                        auto elem = std::find_if(begin, end, [id = x.instr_id](ooo_model_instr& y) { return y.instr_id == id; });
+                        if(elem != end){
+                          reg_producers.at(dreg).erase(elem);
+                        }
+                      }
+             	    } else {
+		      
+		      auto first_wp_inst = find_if(std::begin(x.registers_instrs_depend_on_me), std::end(x.registers_instrs_depend_on_me), [id = id](auto &y){ auto &z = y.get(); return z.instr_id > id; });
+
+		      //assert(first_wp_inst.is_wrong_path && "This should wrong path instruction");
+
+		      x.registers_instrs_depend_on_me.erase(first_wp_inst, std::end(x.registers_instrs_depend_on_me));
+
+		    } 
+	} );
+	auto sq_it_squash_begin = find_if(std::begin(SQ), std::end(SQ), [id = instr.instr_id](auto &x){ return x.instr_id > id;});
+	if (sq_it_squash_begin != SQ.end()){
+	    //for_each(sq_it_squash_begin, std::end(SQ), [](auto &x) { fmt::print("Erasing SQ entry instr_id {} \n", x.instr_id); });
+	    SQ.erase(sq_it_squash_begin, std::end(SQ));
+	}
+
+	for_each(std::begin(LQ), std::end(LQ), [id = instr.instr_id](auto &x) { 
+			if( x->instr_id > id) 
+			{
+			  //fmt::print("Erasing LQ entry instr_id {} \n", x->instr_id);
+			  x.reset();
+			} 
+		});
+        auto rob_it = find_if(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { return x.instr_id > id;});
+        //if (rob_it != std::end(ROB)){
+        //    ROB.erase(rob_it, std::end(ROB));
         //}
         //flush ROB, DISPATH_BUFFER, DECODE_BUFFER, IFETCH_BUFFER
         DISPATCH_BUFFER.clear();
@@ -899,6 +936,14 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
+
+    //for (auto& sq_entry : SQ) {
+    //  if (sq_entry.instr_id == it->instr_id) {
+    //    //if(!it->is_wrong_path){
+    //      sq_entry.event_cycle = current_cycle + 1;
+    //    //}
+    //  }
+    //}
     if(!it->is_wrong_path){
         retire_instr_id = it->instr_id;
     }
