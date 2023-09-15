@@ -674,8 +674,7 @@ long O3_CPU::operate_lsq()
 {
   auto store_bw = SQ_WIDTH;
 
-  //const auto complete_id = std::empty(ROB) ? std::numeric_limits<uint64_t>::max() : ROB.front().instr_id;
-  const auto complete_id = std::empty(ROB) ? 0 : ROB.front().instr_id;
+  const auto complete_id = std::empty(ROB) ? std::numeric_limits<uint64_t>::max() : ROB.front().instr_id;
   auto do_complete = [cycle = current_cycle, complete_id, this](const auto& x) {
     return x.instr_id < complete_id && x.event_cycle <= cycle && this->do_complete_store(x);
   };
@@ -808,6 +807,9 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
             	    if(x.instr_id > id) { 
             	      std::cout <<std::flush;
             	      assert(x.is_wrong_path && "Must be wrong path instruction\n");
+
+		      if(x.executed)
+		          sim_stats.wrong_path_insts_executed++;
             	      x.scheduled = true; 
             	      x.executed = true; 
             	      //do_complete_execution(x);
@@ -830,6 +832,7 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 
 		      //assert(first_wp_inst.is_wrong_path && "This should wrong path instruction");
 
+		      for_each(first_wp_inst, std::end(x.registers_instrs_depend_on_me), [](auto &y) { assert(y.get().is_wrong_path && "Should be wrong path inst\n"); });
 		      x.registers_instrs_depend_on_me.erase(first_wp_inst, std::end(x.registers_instrs_depend_on_me));
 
 		    } 

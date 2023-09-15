@@ -120,7 +120,19 @@ private:
     //});
 
     //bool found = true;
-    //std::cout << "0x"<< std::hex << ip <<": "<<std::endl;
+    //std::cout << "0x"<< std::hex << ip << " ";
+    //if(instr.is_branch){
+    //    std::cout << "Br : ";
+    //}else{
+    //    std::cout << " : ";
+    //}
+    //for(auto it = std::begin(instr.destination_registers); it != std::end(instr.destination_registers); it++){
+    //    std::cout<< std::dec << (int)*it <<" ";
+    //    if((int)*it != 0){
+    //      found = false;
+    //    }
+    //}
+    //std::cout << " <- " ;
     //for(auto it = std::begin(instr.source_registers); it != std::end(instr.source_registers); it++){
     //    std::cout<< std::dec << (int)*it <<" ";
     //    if((int)*it != 0){
