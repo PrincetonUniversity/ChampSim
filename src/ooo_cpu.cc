@@ -117,7 +117,6 @@ void O3_CPU::initialize_instruction()
   if(fetch_instr_id && fetch_instr_id == exec_instr_id){
 
       prev_fetch_block = 0;
-      fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
       while(!input_queue.empty() && input_queue.front().is_wrong_path){
 	  sim_stats.wrong_path_insts++;
           sim_stats.wrong_path_skipped++;
@@ -131,6 +130,7 @@ void O3_CPU::initialize_instruction()
         in_wrong_path = false;
         flush_after = 0;
 	fetch_instr_id = 0;
+        fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
         //fmt::print("finished flushing\n");
       }else{
         //fmt::print("still finished flushing\n");
@@ -235,8 +235,9 @@ void O3_CPU::initialize_instruction()
       instrs_to_read_this_cycle = 0;
     }
 
-    if(inst.is_wrong_path)
+    if(inst.is_wrong_path){
         sim_stats.wrong_path_insts++;
+    }
 
     update_branch_stats(input_queue.front());
 
@@ -954,6 +955,8 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
+
+    assert(!it->is_wrong_path && "ROB should not contain WP instrutions\n");
 
     if(it->branch_mispredicted || it->before_wrong_path){
 	if(!it->squashed){
