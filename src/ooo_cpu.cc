@@ -695,16 +695,44 @@ long O3_CPU::operate_lsq()
 
   auto load_bw = LQ_WIDTH;
 
-  for (auto& lq_entry : LQ) {
-    if (load_bw > 0 && lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
-        && lq_entry->event_cycle < current_cycle) {
-      auto success = execute_load(*lq_entry);
-      if (success) {
-        --load_bw;
-        lq_entry->fetch_issued = true;
+  while(load_bw > 0){
+    LSQ_ENTRY *smallest_lq_entry = NULL; 
+    for (auto& lq_entry : LQ) {
+
+      if (lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
+          && lq_entry->event_cycle < current_cycle) {
+          if(smallest_lq_entry != NULL){
+              if(lq_entry->event_cycle < smallest_lq_entry->event_cycle){
+                  smallest_lq_entry = &(*lq_entry);
+              }
+          }else{
+              smallest_lq_entry = &(*lq_entry);
+          }
       }
+
+    }
+    if(smallest_lq_entry == NULL){
+        break;
+    }
+    auto success = execute_load(*smallest_lq_entry);
+    if (success) {
+      --load_bw;
+      (smallest_lq_entry)->fetch_issued = true;
+    }else{
+      break;
     }
   }
+  //for (auto& lq_entry : LQ) {
+
+  //  if (load_bw > 0 && lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
+  //      && lq_entry->event_cycle < current_cycle) {
+  //    auto success = execute_load(*lq_entry);
+  //    if (success) {
+  //      --load_bw;
+  //      lq_entry->fetch_issued = true;
+  //    }
+  //  }
+  //}
 
   return (SQ_WIDTH - store_bw) + (LQ_WIDTH - load_bw);
 }
