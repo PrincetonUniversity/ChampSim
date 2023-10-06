@@ -119,7 +119,6 @@ private:
     //  return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
     //});
 
-<<<<<<< HEAD
     //bool found = true;
     //std::cout << "0x"<< std::hex << ip << " ";
     //if(instr.is_branch){
@@ -197,46 +196,6 @@ private:
 			}
 		}
 	}
-=======
-    // determine what kind of branch this is, if any
-    if (!reads_sp && !reads_flags && writes_ip && !reads_other) {
-      // direct jump
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_DIRECT_JUMP;
-    } else if (!reads_sp && !reads_ip && !reads_flags && writes_ip && reads_other) {
-      // indirect branch
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_INDIRECT;
-    } else if (!reads_sp && reads_ip && !writes_sp && writes_ip && (reads_flags || reads_other)) {
-      // conditional branch
-      is_branch = true;
-      branch_taken = instr.branch_taken; // don't change this
-      branch = BRANCH_CONDITIONAL;
-    } else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && !reads_other) {
-      // direct call
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_DIRECT_CALL;
-    } else if (reads_sp && reads_ip && writes_sp && writes_ip && !reads_flags && reads_other) {
-      // indirect call
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_INDIRECT_CALL;
-    } else if (reads_sp && !reads_ip && writes_sp && writes_ip) {
-      // return
-      is_branch = true;
-      branch_taken = true;
-      branch = BRANCH_RETURN;
-    } else if (writes_ip) {
-      // some other branch type that doesn't fit the above categories
-      is_branch = true;
-      branch_taken = instr.branch_taken; // don't change this
-      branch = BRANCH_OTHER;
-    } else {
-      branch_taken = false;
->>>>>>> original/develop
     }
     //// determine what kind of branch this is, if any
     //if (!reads_sp && !reads_flags && writes_ip && !reads_other) {
