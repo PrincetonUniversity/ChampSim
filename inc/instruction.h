@@ -76,6 +76,8 @@ struct ooo_model_instr {
   bool is_squash_after = false;
   bool is_wrong_path = false;
 
+  bool is_prefetch = false;
+
   std::array<uint8_t, 2> asid = {std::numeric_limits<uint8_t>::max(), std::numeric_limits<uint8_t>::max()};
 
   branch_type branch{NOT_BRANCH};
@@ -158,6 +160,8 @@ private:
     is_write_barrier = (flags & 1 << WRITE_BARRIER);
     is_squash_after = (flags & 1 << SQUASH_AFTER);
     is_wrong_path = (flags & 1 << SQUASHED);
+
+    is_prefetch = instr.pref;
 
     int brCode = instr.is_branch;
 

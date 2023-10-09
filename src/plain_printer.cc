@@ -61,6 +61,11 @@ void champsim::plain_printer::print(O3_CPU::stats_type stats)
     fmt::print(stream, "{}: {:.3}\n", branch_type_names.at(champsim::to_underlying(idx)), mpkis.at(champsim::to_underlying(idx)));
   }
   fmt::print(stream, "\n");
+
+  fmt::print(stream, "Wrong Path Stats\n");
+  fmt::print(stream, "Loads: Count {} Issued {}\n", stats.wrong_path_loads, stats.wrong_path_loads_executed);
+  fmt::print(stream, "\n");
+
 }
 
 void champsim::plain_printer::print(CACHE::stats_type stats)

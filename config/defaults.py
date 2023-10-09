@@ -27,7 +27,7 @@ def cache_core_defaults(cpu):
 
 def ptw_core_defaults(cpu):
     ''' Generate the lower levels that a default core would expect for each of its PTWs '''
-    yield { 'name': cpu.get('PTW'), 'lower_level': cpu.get('L1D') }
+    yield { 'name': cpu.get('PTW'), 'lower_level': cpu.get('L2C') }
 
 def list_defaults_for_core(cpu, caches):
     ''' Generate the down-path defaults that a default core would expect '''

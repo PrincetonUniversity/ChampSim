@@ -73,6 +73,10 @@ struct cpu_stats {
   uint64_t wrong_path_skipped = 0;
   uint64_t wrong_path_insts = 0;
   uint64_t wrong_path_insts_executed = 0;
+  uint64_t decode_idle_cycles = 0;
+  uint64_t exexute_idle_cycles = 0;
+  uint64_t wrong_path_loads = 0;
+  uint64_t wrong_path_loads_executed = 0;
 
   std::array<long long, 8> total_branch_types = {};
   std::array<long long, 8> branch_type_misses = {};
@@ -148,6 +152,8 @@ public:
   std::deque<ooo_model_instr> DISPATCH_BUFFER;
   std::deque<ooo_model_instr> DECODE_BUFFER;
   std::deque<ooo_model_instr> ROB;
+
+  std::deque<ooo_model_instr>::iterator ifb_last_fetched = IFETCH_BUFFER.end();
 
   //BGODALA: Wrong Path
   std::map<uint64_t,std::deque<ooo_model_instr>> WPATH_MAP;
