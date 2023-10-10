@@ -73,10 +73,20 @@ struct cpu_stats {
   uint64_t wrong_path_skipped = 0;
   uint64_t wrong_path_insts = 0;
   uint64_t wrong_path_insts_executed = 0;
+  uint64_t fetch_idle_cycles = 0;
+  uint64_t fetch_failed_events = 0;
+  uint64_t fetch_buffer_not_empty = 0;
+  uint64_t fetch_blocked_cycles = 0;
   uint64_t decode_idle_cycles = 0;
-  uint64_t exexute_idle_cycles = 0;
+  uint64_t execute_idle_cycles = 0;
+  uint64_t sched_idle_cycles = 0;
+  uint64_t dispatch_idle_cycles = 0;
+  uint64_t rob_idle_cycles = 0;
   uint64_t wrong_path_loads = 0;
   uint64_t wrong_path_loads_executed = 0;
+
+  uint64_t lq_full_events = 0;
+  uint64_t sq_full_events = 0;
 
   std::array<long long, 8> total_branch_types = {};
   std::array<long long, 8> branch_type_misses = {};

@@ -413,6 +413,8 @@ long O3_CPU::fetch_instruction()
     return (lhs.ip >> LOG2_BLOCK_SIZE) != (rhs.ip >> LOG2_BLOCK_SIZE);
   };
 
+  bool failed = false;
+
   auto l1i_req_begin = std::find_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), fetch_ready);
   for (auto to_read = L1I_BANDWIDTH; to_read > 0 && l1i_req_begin != std::end(IFETCH_BUFFER); --to_read) {
     auto l1i_req_end = std::adjacent_find(l1i_req_begin, std::end(IFETCH_BUFFER), no_match_ip);
@@ -426,9 +428,26 @@ long O3_CPU::fetch_instruction()
       std::for_each(l1i_req_begin, l1i_req_end, [](auto& x) { x.fetch_issued = true; });
       //prev_fetch_block = l1i_req_begin->ip >> LOG2_BLOCK_SIZE;
       ++progress;
+    }else{
+        failed = true;
+        sim_stats.fetch_failed_events++;
     }
 
     l1i_req_begin = std::find_if(l1i_req_end, std::end(IFETCH_BUFFER), fetch_ready);
+  }
+
+  if(progress == 0){
+      sim_stats.fetch_idle_cycles++;
+      if(!IFETCH_BUFFER.empty()){
+          if(!IFETCH_BUFFER.back().fetch_issued){
+              sim_stats.fetch_buffer_not_empty++; 
+          }
+          
+      }
+  }
+
+  if(fetch_resume_cycle == std::numeric_limits<uint64_t>::max()){
+      sim_stats.fetch_blocked_cycles++;
   }
 
   return progress;
@@ -553,6 +572,14 @@ long O3_CPU::dispatch_instruction()
 {
   auto available_dispatch_bandwidth = DISPATCH_WIDTH;
 
+  if(((std::size_t)std::count_if(std::begin(LQ), std::end(LQ), [](const auto& lq_entry) { return !lq_entry.has_value();  })) == 0){
+      sim_stats.lq_full_events++;
+  }
+  
+  if(std::size(SQ) == 0){
+      sim_stats.sq_full_events++;
+  }
+
   // dispatch DISPATCH_WIDTH instructions into the ROB
   while (available_dispatch_bandwidth > 0 && !std::empty(DISPATCH_BUFFER) && DISPATCH_BUFFER.front().event_cycle < current_cycle && std::size(ROB) != ROB_SIZE
          && ((std::size_t)std::count_if(std::begin(LQ), std::end(LQ), [](const auto& lq_entry) { return !lq_entry.has_value(); })
@@ -574,6 +601,10 @@ long O3_CPU::dispatch_instruction()
     available_dispatch_bandwidth--;
   }
 
+  if((DISPATCH_WIDTH - available_dispatch_bandwidth) == 0){
+      sim_stats.dispatch_idle_cycles++;
+  }
+
   return DISPATCH_WIDTH - available_dispatch_bandwidth;
 }
 
@@ -592,6 +623,10 @@ long O3_CPU::schedule_instruction()
     }
   }
 
+  if(progress == 0){
+      sim_stats.sched_idle_cycles++;
+  }
+
   return progress;
 }
 
@@ -603,7 +638,9 @@ void O3_CPU::do_scheduling(ooo_model_instr& instr)
   // Hack to let only memory instructions be executed
   if(instr.is_wrong_path || instr.is_prefetch){
     instr.scheduled = true;
-    instr.event_cycle = current_cycle + (warmup ? 0 : SCHEDULING_LATENCY);
+    //instr.executed = true;
+    //instr.completed = true;
+    instr.event_cycle = current_cycle; 
     return;
   }
   // Mark register dependencies
@@ -644,6 +681,9 @@ long O3_CPU::execute_instruction()
     }
   }
 
+  if( (EXEC_WIDTH - exec_bw) == 0){
+      sim_stats.execute_idle_cycles++;
+  }
   return EXEC_WIDTH - exec_bw;
 }
 
@@ -1134,6 +1174,10 @@ long O3_CPU::retire_rob()
 
   num_retired += retire_count;
   ROB.erase(retire_begin, retire_end);
+
+  if(retire_count == 0){
+      sim_stats.rob_idle_cycles++;
+  }
 
   return retire_count;
 }
