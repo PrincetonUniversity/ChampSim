@@ -82,6 +82,7 @@ struct cpu_stats {
   uint64_t execute_none_cycles = 0;
   uint64_t execute_head_not_ready = 0;
   uint64_t execute_head_not_completed = 0;
+  uint64_t execute_pending_cycles = 0;
   uint64_t sched_idle_cycles = 0;
   uint64_t sched_none_cycles = 0;
   uint64_t dispatch_idle_cycles = 0;

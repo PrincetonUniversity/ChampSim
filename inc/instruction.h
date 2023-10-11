@@ -27,6 +27,7 @@
 #include <iostream>
 
 #include "trace_instruction.h"
+//#define PRINT_TRACE
 
 // branch types
 enum branch_type {
@@ -121,33 +122,46 @@ private:
     //  return r != champsim::REG_STACK_POINTER && r != champsim::REG_FLAGS && r != champsim::REG_INSTRUCTION_POINTER;
     //});
 
-    //bool found = true;
-    //std::cout << "0x"<< std::hex << ip << " ";
-    //if(instr.is_branch){
-    //    std::cout << "Br : ";
-    //}else{
-    //    std::cout << " : ";
-    //}
-    //for(auto it = std::begin(instr.destination_registers); it != std::end(instr.destination_registers); it++){
-    //    std::cout<< std::dec << (int)*it <<" ";
-    //    if((int)*it != 0){
-    //      found = false;
-    //    }
-    //}
-    //std::cout << " <- " ;
-    //for(auto it = std::begin(instr.source_registers); it != std::end(instr.source_registers); it++){
-    //    std::cout<< std::dec << (int)*it <<" ";
-    //    if((int)*it != 0){
-    //      found = false;
-    //    }
-    //}
+#ifdef PRINT_TRACE
+    bool found = true;
+    std::cout << "0x"<< std::hex << ip << " ";
+    if(instr.is_branch){
+        std::cout << "Br : ";
+    }else if (std::size(source_memory) > 0){
+        std::cout << "Ld : ";
+    }else if (std::size(destination_memory) > 0){
+        std::cout << "St : ";
+    }else{
+        std::cout << " : ";
+    }
+    for(auto it = std::begin(destination_registers); it != std::end(destination_registers); it++){
+        std::cout<< std::dec << (int)*it <<" ";
+        if((int)*it != 0){
+          found = false;
+        }
+    }
+    std::cout << " <- " ;
+    for(auto it = std::begin(source_registers); it != std::end(source_registers); it++){
+        std::cout<< std::dec << (int)*it <<" ";
+        if((int)*it != 0){
+          found = false;
+        }
+    }
 
-    //if(found){
-    //    std::cout<<"No source ";
-    //}
+    for(auto it = std::begin(source_memory); it != std::end(source_memory); it++){
+        std::cout<< "0x"<< std::hex << *it << std::dec << " ";
+        if((int)*it != 0){
+          found = false;
+        }
+    }
 
-    //std::cout << std::endl ;
+    if(found){
+        std::cout<<"No source ";
+    }
 
+    std::cout << std::endl ;
+
+#endif
     
 
     int flags = instr.flags;

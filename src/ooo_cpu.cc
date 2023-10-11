@@ -687,6 +687,12 @@ long O3_CPU::execute_instruction()
       sim_stats.execute_idle_cycles++;
       if(!ROB.empty()){
           sim_stats.execute_none_cycles++;
+          auto exec_it = std::find_if(std::begin(ROB), std::end(ROB), [](auto &x){ return x.scheduled && !x.executed; });
+
+          if( exec_it != std::end(ROB)){
+            sim_stats.execute_pending_cycles++; 
+          }
+
           if(!ROB.front().executed){
               sim_stats.execute_head_not_ready++;
           }
@@ -790,53 +796,53 @@ long O3_CPU::operate_lsq()
 
   auto load_bw = LQ_WIDTH;
 
-  while(load_bw > 0){
-    LSQ_ENTRY *smallest_lq_entry = NULL; 
-    for (auto& lq_entry : LQ) {
+  //while(load_bw > 0){
+  //  LSQ_ENTRY *smallest_lq_entry = NULL; 
+  //  for (auto& lq_entry : LQ) {
 
-      if (lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
-          && lq_entry->event_cycle < current_cycle) {
-          if(smallest_lq_entry != NULL){
-              if(lq_entry->event_cycle < smallest_lq_entry->event_cycle){
-                  smallest_lq_entry = &(*lq_entry);
-              }
-          }else{
-              smallest_lq_entry = &(*lq_entry);
-          }
-      }
-
-    }
-    if(smallest_lq_entry == NULL){
-        break;
-    }
-    auto success = execute_load(*smallest_lq_entry);
-    if (success) {
-      --load_bw;
-      (smallest_lq_entry)->fetch_issued = true;
-      if(smallest_lq_entry->is_wrong_path){
-          sim_stats.wrong_path_loads_executed++;
-      }
-    }else{
-      break;
-    }
-  }
-  //for (auto& lq_entry : LQ) {
-
-  //  if (load_bw > 0 && lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
-  //      && lq_entry->event_cycle < current_cycle) {
-  //    auto success = execute_load(*lq_entry);
-  //    if (success) {
-  //      --load_bw;
-  //      lq_entry->fetch_issued = true;
-
-  //      if(lq_entry->is_wrong_path){
-  //          sim_stats.wrong_path_loads_executed++;
-  //      }
-
-  //      //fmt::print("LOAD Issued for address {:#x} instr_id {} ip {:#x} is_wrong_path {}\n", lq_entry->virtual_address, lq_entry->instr_id, lq_entry->ip, lq_entry->is_wrong_path);
+  //    if (lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
+  //        && lq_entry->event_cycle < current_cycle) {
+  //        if(smallest_lq_entry != NULL){
+  //            if(lq_entry->event_cycle < smallest_lq_entry->event_cycle){
+  //                smallest_lq_entry = &(*lq_entry);
+  //            }
+  //        }else{
+  //            smallest_lq_entry = &(*lq_entry);
+  //        }
   //    }
+
+  //  }
+  //  if(smallest_lq_entry == NULL){
+  //      break;
+  //  }
+  //  auto success = execute_load(*smallest_lq_entry);
+  //  if (success) {
+  //    --load_bw;
+  //    (smallest_lq_entry)->fetch_issued = true;
+  //    if(smallest_lq_entry->is_wrong_path){
+  //        sim_stats.wrong_path_loads_executed++;
+  //    }
+  //  }else{
+  //    break;
   //  }
   //}
+  for (auto& lq_entry : LQ) {
+
+    if (load_bw > 0 && lq_entry.has_value() && lq_entry->producer_id == std::numeric_limits<uint64_t>::max() && !lq_entry->fetch_issued
+        && lq_entry->event_cycle < current_cycle) {
+      auto success = execute_load(*lq_entry);
+      if (success) {
+        --load_bw;
+        lq_entry->fetch_issued = true;
+
+        if(lq_entry->is_wrong_path){
+            sim_stats.wrong_path_loads_executed++;
+        }
+
+        //fmt::print("LOAD Issued for address {:#x} instr_id {} ip {:#x} is_wrong_path {}\n", lq_entry->virtual_address, lq_entry->instr_id, lq_entry->ip, lq_entry->is_wrong_path);
+      }
+    }
+  }
 
   return (SQ_WIDTH - store_bw) + (LQ_WIDTH - load_bw);
 }
