@@ -442,7 +442,6 @@ long O3_CPU::fetch_instruction()
           if(!IFETCH_BUFFER.back().fetch_issued){
               sim_stats.fetch_buffer_not_empty++; 
           }
-          
       }
   }
 
@@ -576,7 +575,7 @@ long O3_CPU::dispatch_instruction()
       sim_stats.lq_full_events++;
   }
   
-  if(std::size(SQ) == 0){
+  if(std::size(SQ) == SQ_SIZE){
       sim_stats.sq_full_events++;
   }
 
@@ -625,6 +624,9 @@ long O3_CPU::schedule_instruction()
 
   if(progress == 0){
       sim_stats.sched_idle_cycles++;
+      if(!ROB.empty() && !ROB.back().scheduled){
+          sim_stats.sched_none_cycles++;
+      }
   }
 
   return progress;
@@ -683,6 +685,12 @@ long O3_CPU::execute_instruction()
 
   if( (EXEC_WIDTH - exec_bw) == 0){
       sim_stats.execute_idle_cycles++;
+      if(!ROB.empty()){
+          sim_stats.execute_none_cycles++;
+          if(!ROB.front().executed){
+              sim_stats.execute_head_not_ready++;
+          }
+      }
   }
   return EXEC_WIDTH - exec_bw;
 }
@@ -928,6 +936,9 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
 #ifdef BGODALA
         fmt::print("flush ROB cycle {} instr_id {} ROB_SIZE {} fetch_instr_id {}\n", current_cycle, instr.instr_id, ROB.size(), fetch_instr_id);
 #endif
+        if(instr.before_wrong_path && !instr.is_branch){
+          sim_stats.non_branch_squashes++;
+        }
         instr.squashed = true;
 
         for_each(std::begin(ROB), std::end(ROB), [id = instr.instr_id, this](auto &x) { 
