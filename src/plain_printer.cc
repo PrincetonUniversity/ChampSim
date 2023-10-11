@@ -76,6 +76,7 @@ void champsim::plain_printer::print(O3_CPU::stats_type stats)
   fmt::print(stream, "Execute Idle Cycles {}\n", stats.execute_idle_cycles);
   fmt::print(stream, "Execute None Cycles {}\n", stats.execute_none_cycles);
   fmt::print(stream, "Execute Head Not Ready Cycles {}\n", stats.execute_head_not_ready);
+  fmt::print(stream, "Execute Head Not Completed Cycles {}\n", stats.execute_head_not_completed);
   fmt::print(stream, "Scheduler Idle Cycles {}\n", stats.sched_idle_cycles);
   fmt::print(stream, "Scheduler None Cycles {}\n", stats.sched_none_cycles);
   fmt::print(stream, "ROB Idle Cycles {}\n", stats.rob_idle_cycles);

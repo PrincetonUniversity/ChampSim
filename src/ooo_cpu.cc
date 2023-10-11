@@ -690,6 +690,9 @@ long O3_CPU::execute_instruction()
           if(!ROB.front().executed){
               sim_stats.execute_head_not_ready++;
           }
+          if(ROB.front().executed && !ROB.front().completed){
+              sim_stats.execute_head_not_completed++;
+          }
       }
   }
   return EXEC_WIDTH - exec_bw;
