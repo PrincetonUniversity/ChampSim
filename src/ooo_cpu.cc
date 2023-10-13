@@ -113,6 +113,13 @@ void O3_CPU::initialize_instruction()
   auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
 
 
+  if(fetch_resume_cycle == std::numeric_limits<uint64_t>::max()){
+     sim_stats.fetch_mispred_block_cycles++; 
+  }else if(sim_stats.fetch_mispred_block_cycles){
+      //fmt::print("blocked cycles {}\n", sim_stats.fetch_mispred_block_cycles);
+      sim_stats.fetch_mispred_block_cycles = 0;
+  }
+
   //if(fetch_instr_id == retire_instr_id){
   if(fetch_instr_id && fetch_instr_id == exec_instr_id){
 
@@ -715,6 +722,10 @@ long O3_CPU::execute_instruction()
           if(ROB.front().executed && !ROB.front().completed){
               //fmt::print("ip: {:#x} instr_id {} cycle {}\n", ROB.front().ip, ROB.front().instr_id, current_cycle);
               sim_stats.execute_head_not_completed++;
+
+              if(std::size(ROB.front().source_memory)){
+                  sim_stats.execute_load_blocked_cycles++;
+              }
           }
       }
   }
@@ -738,6 +749,19 @@ void O3_CPU::do_execution(ooo_model_instr& instr)
   for (auto& sq_entry : SQ) {
     if (sq_entry.instr_id == instr.instr_id) {
       sq_entry.event_cycle = current_cycle + (warmup ? 0 : EXEC_LATENCY);
+      for (std::optional<LSQ_ENTRY>& dependent : sq_entry.lq_depend_on_me) {
+        if(!dependent.has_value()){
+            continue;
+        }
+        //assert(dependent.has_value()); // LQ entry is still allocated
+        //assert(dependent->producer_id == sq_entry.instr_id);
+
+        if(dependent->producer_id == sq_entry.instr_id){
+            //fmt::print("store finished but found dependent load!");
+            dependent->finish(std::begin(ROB), std::end(ROB));
+            dependent.reset();
+        }
+      }
     }
   }
 
@@ -758,7 +782,7 @@ void O3_CPU::do_memory_scheduling(ooo_model_instr& instr)
     auto sq_it = std::max_element(std::begin(SQ), std::end(SQ), [smem](const auto& lhs, const auto& rhs) {
       return lhs.virtual_address != smem || (rhs.virtual_address == smem && lhs.instr_id < rhs.instr_id);
     });
-    if (false && sq_it != std::end(SQ) && sq_it->virtual_address == smem && !instr.is_wrong_path) {
+    if (sq_it != std::end(SQ) && sq_it->virtual_address == smem && !instr.is_wrong_path) {
       if (sq_it->fetch_issued) { // Store already executed
         (*q_entry)->finish(instr);
         q_entry->reset();

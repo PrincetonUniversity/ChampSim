@@ -83,6 +83,7 @@ struct cpu_stats {
   uint64_t execute_head_not_ready = 0;
   uint64_t execute_head_not_completed = 0;
   uint64_t execute_pending_cycles = 0;
+  uint64_t execute_load_blocked_cycles = 0;
   uint64_t sched_idle_cycles = 0;
   uint64_t sched_none_cycles = 0;
   uint64_t dispatch_idle_cycles = 0;
@@ -95,6 +96,7 @@ struct cpu_stats {
   uint64_t wrong_path_loads = 0;
   uint64_t wrong_path_loads_executed = 0;
   uint64_t non_branch_squashes = 0;
+  uint64_t fetch_mispred_block_cycles = 0;
 
   uint64_t lq_full_events = 0;
   uint64_t sq_full_events = 0;

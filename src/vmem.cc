@@ -101,5 +101,10 @@ std::pair<uint64_t, uint64_t> VirtualMemory::get_pte_pa(uint32_t cpu_num, uint64
     fmt::print("[VMEM] {} paddr: {:x} vaddr: {:x} pt_page_offset: {} translation_level: {} fault: {}\n", __func__, paddr, vaddr, offset, level, fault);
   }
 
+  //if(fault){
+  //  fmt::print("fault paying penalty {}\n", minor_fault_penalty);
+  //}
+
+
   return {paddr, fault ? minor_fault_penalty : 0};
 }
