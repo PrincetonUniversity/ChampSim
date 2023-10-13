@@ -87,6 +87,11 @@ struct cpu_stats {
   uint64_t sched_none_cycles = 0;
   uint64_t dispatch_idle_cycles = 0;
   uint64_t rob_idle_cycles = 0;
+  uint64_t loads = 0;
+  uint64_t loads_executed = 0;
+  uint64_t loads_retired = 0;
+  uint64_t loads_success = 0;
+  uint64_t stores = 0;
   uint64_t wrong_path_loads = 0;
   uint64_t wrong_path_loads_executed = 0;
   uint64_t non_branch_squashes = 0;

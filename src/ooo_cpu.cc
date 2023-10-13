@@ -118,9 +118,12 @@ void O3_CPU::initialize_instruction()
 
       prev_fetch_block = 0;
       while(!input_queue.empty() && input_queue.front().is_wrong_path){
-	  sim_stats.wrong_path_insts++;
-          sim_stats.wrong_path_skipped++;
           auto inst = input_queue.front();
+          if(inst.is_wrong_path && std::size(inst.source_memory)){
+              sim_stats.wrong_path_loads++;
+          }
+	      sim_stats.wrong_path_insts++;
+          sim_stats.wrong_path_skipped++;
 #ifdef BGODALA
           fmt::print("exec_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -140,9 +143,12 @@ void O3_CPU::initialize_instruction()
   if(flush_after){
         //fmt::print("flushing\n");
         while(!input_queue.empty() && input_queue.front().is_wrong_path){
-	    sim_stats.wrong_path_insts++;
-            sim_stats.wrong_path_skipped++;
             auto inst = input_queue.front();
+            if(inst.is_wrong_path && std::size(inst.source_memory)){
+                sim_stats.wrong_path_loads++;
+            }
+	        sim_stats.wrong_path_insts++;
+            sim_stats.wrong_path_skipped++;
 #ifdef BGODALA
             fmt::print("decode_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -162,9 +168,12 @@ void O3_CPU::initialize_instruction()
 
       if(!enable_wrong_path){
         while(!input_queue.empty() && (input_queue.front().is_wrong_path || input_queue.front().is_prefetch)){
+            auto inst = input_queue.front();
+        if(inst.is_wrong_path && std::size(inst.source_memory)){
+            sim_stats.wrong_path_loads++;
+        }
 	    sim_stats.wrong_path_insts++;
             sim_stats.wrong_path_skipped++;
-            auto inst = input_queue.front();
 #ifdef BGODALA
             fmt::print("ignore ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -172,6 +181,7 @@ void O3_CPU::initialize_instruction()
         }
 
         if(input_queue.empty()){
+            fmt::print("INPUT Queue empty!");
            break;
         }
       }
@@ -181,6 +191,12 @@ void O3_CPU::initialize_instruction()
 
     auto inst = input_queue.front();
   
+    if(std::size(inst.source_memory)){
+        sim_stats.loads++;
+    }
+    if(std::size(inst.destination_memory)){
+        sim_stats.stores++;
+    }
 
     //auto stop_fetch = do_init_instruction(input_queue.front());
     auto stop_fetch = false;
@@ -697,6 +713,7 @@ long O3_CPU::execute_instruction()
               sim_stats.execute_head_not_ready++;
           }
           if(ROB.front().executed && !ROB.front().completed){
+              //fmt::print("ip: {:#x} instr_id {} cycle {}\n", ROB.front().ip, ROB.front().instr_id, current_cycle);
               sim_stats.execute_head_not_completed++;
           }
       }
@@ -712,6 +729,7 @@ void O3_CPU::do_execution(ooo_model_instr& instr)
   // Mark LQ entries as ready to translate
   for (auto& lq_entry : LQ) {
     if (lq_entry.has_value() && lq_entry->instr_id == instr.instr_id) {
+        sim_stats.loads_executed++;
       lq_entry->event_cycle = current_cycle + (warmup ? 0 : EXEC_LATENCY);
     }
   }
@@ -832,8 +850,11 @@ long O3_CPU::operate_lsq()
         && lq_entry->event_cycle < current_cycle) {
       auto success = execute_load(*lq_entry);
       if (success) {
+          sim_stats.loads_success++;
         --load_bw;
         lq_entry->fetch_issued = true;
+        //lq_entry->finish(std::begin(ROB), std::end(ROB));
+        //lq_entry.reset();
 
         if(lq_entry->is_wrong_path){
             sim_stats.wrong_path_loads_executed++;
@@ -1125,6 +1146,11 @@ long O3_CPU::retire_rob()
   auto it = retire_begin;
   while (it != retire_end){
 
+    if(std::size(it->source_memory)){
+        sim_stats.loads_retired++;
+    }
+
+
       if(it->is_wrong_path){
          print_deadlock();
       }
@@ -1229,12 +1255,12 @@ void O3_CPU::print_deadlock()
   fmt::print("DEADLOCK! CPU {} cycle {}\n", cpu, current_cycle);
 
   auto instr_pack = [](const auto& entry) {
-    return std::tuple{entry.instr_id,   entry.fetch_issued, entry.fetch_completed,    entry.scheduled,
+    return std::tuple{entry.instr_id,   entry.ip, entry.fetch_issued, entry.fetch_completed,    entry.scheduled,
                       entry.executed,   entry.completed,    +entry.num_reg_dependent, entry.num_mem_ops() - entry.completed_mem_ops,
                       entry.event_cycle, entry.is_wrong_path};
   };
   std::string_view instr_fmt{
-      "instr_id: {} fetch_issued: {} fetch_completed: {} scheduled: {} executed: {} completed: {} num_reg_dependent: {} num_mem_ops: {} event: {} wrong_path: {}"};
+      "instr_id: {} ip: {:#x} fetch_issued: {} fetch_completed: {} scheduled: {} executed: {} completed: {} num_reg_dependent: {} num_mem_ops: {} event: {} wrong_path: {}"};
   champsim::range_print_deadlock(IFETCH_BUFFER, "cpu" + std::to_string(cpu) + "_IFETCH", instr_fmt, instr_pack);
   champsim::range_print_deadlock(DECODE_BUFFER, "cpu" + std::to_string(cpu) + "_DECODE", instr_fmt, instr_pack);
   champsim::range_print_deadlock(DISPATCH_BUFFER, "cpu" + std::to_string(cpu) + "_DISPATCH", instr_fmt, instr_pack);
@@ -1291,8 +1317,8 @@ void LSQ_ENTRY::finish(ooo_model_instr& rob_entry) const
 
 bool CacheBus::issue_read(request_type data_packet)
 {
-  //data_packet.address = data_packet.v_address;
-  data_packet.address = (data_packet.v_address >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
+  data_packet.address = data_packet.v_address;
+  //data_packet.address = (data_packet.v_address >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE;
   data_packet.is_translated = false;
   data_packet.cpu = cpu;
   data_packet.type = access_type::LOAD;

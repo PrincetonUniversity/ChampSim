@@ -86,6 +86,14 @@ void champsim::plain_printer::print(O3_CPU::stats_type stats)
   fmt::print(stream, "Non Branch Squashes {}\n", stats.non_branch_squashes);
   fmt::print(stream, "\n");
 
+  fmt::print(stream, "Inst Stats\n");
+  fmt::print(stream, "Loads: {} \n", stats.loads);
+  fmt::print(stream, "Loads Success: {} \n", stats.loads_success);
+  fmt::print(stream, "Loads Executed: {} \n", stats.loads_executed);
+  fmt::print(stream, "Loads Retired: {} \n", stats.loads_retired);
+  fmt::print(stream, "Stores: {} \n", stats.stores);
+  fmt::print(stream, "\n");
+
 }
 
 void champsim::plain_printer::print(CACHE::stats_type stats)

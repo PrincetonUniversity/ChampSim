@@ -149,7 +149,7 @@ private:
     }
 
     for(auto it = std::begin(source_memory); it != std::end(source_memory); it++){
-        std::cout<< "0x"<< std::hex << *it << std::dec << " ";
+        std::cout<< "0x"<< std::hex << (uint64_t)*it << std::dec << " ";
         if((int)*it != 0){
           found = false;
         }
