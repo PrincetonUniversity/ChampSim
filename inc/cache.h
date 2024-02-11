@@ -54,6 +54,12 @@ struct cache_stats {
   uint64_t pf_useless = 0;
   uint64_t pf_fill = 0;
 
+  // wrong_path stats
+  uint64_t wp_load = 0;
+  uint64_t wp_store = 0;
+  uint64_t wp_fill = 0;
+  uint64_t wp_evicted = 0; // To track cache line from right path evicted by wrong path req.
+
   std::array<std::array<uint64_t, NUM_CPUS>, champsim::to_underlying(access_type::NUM_TYPES)> hits = {};
   std::array<std::array<uint64_t, NUM_CPUS>, champsim::to_underlying(access_type::NUM_TYPES)> misses = {};
 
@@ -79,6 +85,7 @@ class CACHE : public champsim::operable
     uint64_t instr_id;
 
     uint32_t pf_metadata;
+    bool wrong_path;
     uint32_t cpu;
 
     access_type type;
@@ -110,6 +117,7 @@ class CACHE : public champsim::operable
     };
     champsim::waitable<returned_value> data_promise{};
     uint32_t cpu;
+    bool wrong_path;
 
     access_type type;
     bool prefetch_from_this;
