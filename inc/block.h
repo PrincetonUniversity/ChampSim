@@ -23,6 +23,7 @@ struct cache_block {
   bool valid = false;
   bool prefetch = false;
   bool dirty = false;
+  bool wrong_path = false;
 
   uint64_t address = 0;
   uint64_t v_address = 0;

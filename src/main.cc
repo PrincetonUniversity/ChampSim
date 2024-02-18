@@ -62,6 +62,7 @@ int main(int argc, char** argv)
   long long simulation_instructions = std::numeric_limits<long long>::max();
   std::string json_file_name;
   std::vector<std::string> trace_names;
+  float bpu_correction_probability = 0;
 
   auto set_heartbeat_callback = [&](auto) {
     for (O3_CPU& cpu : gen_environment.cpu_view()) {
@@ -91,9 +92,16 @@ int main(int argc, char** argv)
 
   app.add_option("traces", trace_names, "The paths to the traces")->required()->expected(NUM_CPUS)->check(CLI::ExistingFile);
 
+  app.add_option("--bcp,--bpu_correction_probability", bpu_correction_probability, "Value from 0-1, branch misprediction correction");
+
   options.init(app);
   CLI11_PARSE(app, argc, argv);
   options.update(gen_environment);
+
+  assert(bpu_correction_probability >= 0 &&  bpu_correction_probability <= 1 && "Value from 0-1");
+  for (O3_CPU& cpu : gen_environment.cpu_view()) {
+    cpu.bpu_correction_probability = bpu_correction_probability;
+  }
 
   const bool warmup_given = (warmup_instr_option->count() > 0) || (deprec_warmup_instr_option->count() > 0);
   const bool simulation_given = (sim_instr_option->count() > 0) || (deprec_sim_instr_option->count() > 0);

@@ -153,6 +153,10 @@ public:
   bool enable_wrong_path=false;
   uint64_t flush_after=0;
 
+  // BPU Force correction
+  float bpu_correction_probability = 0;
+  bool bpu_correction_interruped = false;
+
   // instruction
   long long num_retired = 0;
 

@@ -54,6 +54,17 @@ struct cache_stats {
   uint64_t pf_useless = 0;
   uint64_t pf_fill = 0;
 
+  // wrong_path stats
+  uint64_t wp_load = 0;
+  uint64_t wp_store = 0;
+  uint64_t wp_fill = 0;
+  uint64_t wp_evicted = 0; // To track cache line from right path evicted by wrong path req.
+  uint64_t wp_count = 0;
+  uint64_t rp_count = 0;
+
+  uint64_t num_fill = 0;
+  float avg_pollution = 0;
+
   std::array<std::array<uint64_t, NUM_CPUS>, champsim::to_underlying(access_type::NUM_TYPES)> hits = {};
   std::array<std::array<uint64_t, NUM_CPUS>, champsim::to_underlying(access_type::NUM_TYPES)> misses = {};
 
@@ -79,6 +90,7 @@ class CACHE : public champsim::operable
     uint64_t instr_id;
 
     uint32_t pf_metadata;
+    bool wrong_path;
     uint32_t cpu;
 
     access_type type;
@@ -110,6 +122,7 @@ class CACHE : public champsim::operable
     };
     champsim::waitable<returned_value> data_promise{};
     uint32_t cpu;
+    bool wrong_path = 0;
 
     access_type type;
     bool prefetch_from_this;
@@ -127,6 +140,8 @@ class CACHE : public champsim::operable
 
   bool try_hit(const tag_lookup_type& handle_pkt);
   bool handle_fill(const mshr_type& fill_mshr);
+  uint64_t next_comp_fill = 1000;
+  std::vector<float> polluation;
   bool handle_miss(const tag_lookup_type& handle_pkt);
   bool handle_write(const tag_lookup_type& handle_pkt);
   void finish_packet(const response_type& packet);
@@ -135,6 +150,9 @@ class CACHE : public champsim::operable
   void issue_translation(tag_lookup_type& q_entry) const;
 
 public:
+  bool first_entry = true;
+  uint64_t last_entry_clk = 0;
+  std::vector<std::vector<uint64_t>> cache_pollution;
   using BLOCK = champsim::cache_block;
 
 private:
@@ -313,6 +331,8 @@ public:
         prefetch_as_load(b.m_pref_load), match_offset_bits(b.m_wq_full_addr), virtual_prefetch(b.m_va_pref), pref_activate_mask(b.m_pref_act_mask),
         pref_module_pimpl(std::make_unique<prefetcher_module_model<Ps...>>(this)), repl_module_pimpl(std::make_unique<replacement_module_model<Rs...>>(this))
   {
+      std::vector<uint64_t> temp(3,0);
+      cache_pollution.push_back(temp);
   }
 };
 
