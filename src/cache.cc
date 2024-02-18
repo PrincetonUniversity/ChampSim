@@ -15,7 +15,8 @@
  */
 
 #include "cache.h"
-
+#include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -35,13 +36,13 @@
 #include "util/span.h"
 
 CACHE::tag_lookup_type::tag_lookup_type(const request_type& req, bool local_pref, bool skip)
-    : address(req.address), v_address(req.v_address), data(req.data), ip(req.ip), instr_id(req.instr_id), pf_metadata(req.pf_metadata), cpu(req.cpu),
-      type(req.type), prefetch_from_this(local_pref), skip_fill(skip), is_translated(req.is_translated), instr_depend_on_me(req.instr_depend_on_me)
+    : address(req.address), v_address(req.v_address), data(req.data), ip(req.ip), instr_id(req.instr_id), pf_metadata(req.pf_metadata), wrong_path(req.wrong_path),
+      cpu(req.cpu), type(req.type), prefetch_from_this(local_pref), skip_fill(skip), is_translated(req.is_translated), instr_depend_on_me(req.instr_depend_on_me)
 {
 }
 
 CACHE::mshr_type::mshr_type(const tag_lookup_type& req, uint64_t cycle)
-    : address(req.address), v_address(req.v_address), ip(req.ip), instr_id(req.instr_id), cpu(req.cpu), type(req.type),
+    : address(req.address), v_address(req.v_address), ip(req.ip), instr_id(req.instr_id), cpu(req.cpu), wrong_path(req.wrong_path), type(req.type),
       prefetch_from_this(req.prefetch_from_this), cycle_enqueued(cycle), instr_depend_on_me(req.instr_depend_on_me), to_return(req.to_return)
 {
 }
@@ -60,6 +61,9 @@ CACHE::mshr_type CACHE::mshr_type::merge(mshr_type predecessor, mshr_type succes
   retval.instr_depend_on_me = merged_instr;
   retval.to_return = merged_return;
   retval.data_promise = predecessor.data_promise;
+  // If the successor is on write path & predecssor is on wrong path then consider the request as good request
+  // If both successor & predecssor are on wrong path then it will cause pollution of cache/tlb
+  retval.wrong_path = predecessor.wrong_path & successor.wrong_path;
 
   if constexpr (champsim::debug_print) {
     if (successor.type == access_type::PREFETCH) {
@@ -82,6 +86,7 @@ auto CACHE::fill_block(mshr_type mshr, uint32_t metadata) -> BLOCK
   to_fill.valid = true;
   to_fill.prefetch = mshr.prefetch_from_this;
   to_fill.dirty = (mshr.type == access_type::WRITE);
+  to_fill.wrong_path = mshr.wrong_path;
   to_fill.address = mshr.address;
   to_fill.v_address = mshr.v_address;
   to_fill.data = mshr.data_promise->data;
@@ -169,6 +174,60 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
       ++sim_stats.pf_fill;
     }
 
+    bool fill_wrong_path = fill_mshr.wrong_path;
+    bool evicted_right_path = !way->wrong_path && way != set_end && way->valid;
+    bool evicted_wrong_path = way->wrong_path && way != set_end && way->valid;
+
+    if(fill_mshr.wrong_path){
+      ++sim_stats.wp_fill;
+      if (way != set_end && way->valid && !way->wrong_path){
+        ++sim_stats.wp_evicted;
+      }
+    }
+
+    if(1){
+      ++sim_stats.num_fill;
+      std::vector<uint64_t> temp;
+      if(first_entry){
+        temp.push_back(current_cycle);
+        first_entry = false;
+      }else
+        temp.push_back(current_cycle - last_entry_clk);
+
+      if (fill_wrong_path) {
+        if(evicted_right_path){
+          temp.push_back(cache_pollution.back()[1]-1);  --sim_stats.rp_count;
+          temp.push_back(cache_pollution.back()[2]+1);  ++sim_stats.wp_count;
+        }  else if (evicted_wrong_path) {
+          temp.push_back(cache_pollution.back()[1]);
+          temp.push_back(cache_pollution.back()[2]);
+        } else {
+          temp.push_back(cache_pollution.back()[1]);
+          temp.push_back(cache_pollution.back()[2]+1);  ++sim_stats.wp_count;
+        }
+      } else {
+        if(evicted_right_path){
+          temp.push_back(cache_pollution.back()[1]);
+          temp.push_back(cache_pollution.back()[2]);
+        }  else if (evicted_wrong_path) {
+          temp.push_back(cache_pollution.back()[1]+1);  ++sim_stats.rp_count;
+          temp.push_back(cache_pollution.back()[2]-1);  --sim_stats.wp_count;
+        }  else {
+          temp.push_back(cache_pollution.back()[1]+1);  ++sim_stats.rp_count;
+          temp.push_back(cache_pollution.back()[2]);
+        }
+      }
+
+      cache_pollution.back() = temp;
+      if(sim_stats.num_fill > next_comp_fill && !warmup){
+        //std::cout << "NAME :" <<  ((float_t)cache_pollution.back()[2]/(float_t)(cache_pollution.back()[1]+cache_pollution.back()[2]))*100 << "\n";
+        polluation.push_back(((float_t)cache_pollution.back()[2]/(float_t)(cache_pollution.back()[1]+cache_pollution.back()[2]))*100);
+        next_comp_fill = next_comp_fill + 1000;
+      }
+
+      last_entry_clk = current_cycle;
+    }
+
     *way = fill_block(fill_mshr, metadata_thru);
   }
 
@@ -238,6 +297,7 @@ auto CACHE::mshr_and_forward_packet(const tag_lookup_type& handle_pkt) -> std::p
   fwd_pkt.asid[1] = handle_pkt.asid[1];
   fwd_pkt.type = (handle_pkt.type == access_type::WRITE) ? access_type::RFO : handle_pkt.type;
   fwd_pkt.pf_metadata = handle_pkt.pf_metadata;
+  fwd_pkt.wrong_path = handle_pkt.wrong_path;
   fwd_pkt.cpu = handle_pkt.cpu;
 
   fwd_pkt.address = handle_pkt.address;
@@ -427,6 +487,10 @@ long CACHE::operate()
 
   // Perform tag checks
   auto do_tag_check = [this](const auto& pkt) {
+    if (pkt.wrong_path){
+      if (pkt.type == access_type::LOAD) ++sim_stats.wp_load;
+      else if (pkt.type == access_type::WRITE) ++sim_stats.wp_store;
+    }
     if (this->try_hit(pkt)) {
       return true;
     }
@@ -594,6 +658,7 @@ void CACHE::issue_translation(tag_lookup_type& q_entry) const
     fwd_pkt.asid[1] = q_entry.asid[1];
     fwd_pkt.type = access_type::LOAD;
     fwd_pkt.cpu = q_entry.cpu;
+    fwd_pkt.wrong_path = q_entry.wrong_path;
 
     fwd_pkt.address = q_entry.address;
     fwd_pkt.v_address = q_entry.v_address;
@@ -745,6 +810,38 @@ void CACHE::initialize()
   impl_initialize_replacement();
 }
 
+// Function to dump vector of vectors to CSV file
+void dumpToCSV(const std::vector<std::vector<uint64_t>>& data, const std::string& filename) {
+    std::ofstream outfile(filename);
+
+    if (!outfile.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    size_t segmentSize = data.size() / 100;
+
+    // Loop through each 1% segment and calculate the average
+    for (size_t i = 0; i < 100; ++i) {
+        size_t startIndex = i * segmentSize;
+        size_t endIndex = (i + 1) * segmentSize;
+
+        // Sum the values in the current segment
+        uint64_t sum_right = 0;
+        uint64_t sum_wrong = 0;
+        for (size_t j = startIndex; j < endIndex; ++j) {
+          sum_right = sum_right + data[j][1];
+          sum_wrong = sum_wrong + data[j][2];
+        }
+        sum_right = sum_right / segmentSize;
+        sum_wrong = sum_wrong / segmentSize;
+
+        outfile << i << "," << sum_right << "," << sum_wrong << "\n";
+    }
+
+    outfile.close();
+}
+
 void CACHE::begin_phase()
 {
   stats_type new_roi_stats;
@@ -788,6 +885,15 @@ void CACHE::end_phase(unsigned finished_cpu)
   roi_stats.pf_useless = sim_stats.pf_useless;
   roi_stats.pf_fill = sim_stats.pf_fill;
 
+  roi_stats.wp_load = sim_stats.wp_load;
+  roi_stats.wp_store = sim_stats.wp_store;
+  roi_stats.wp_fill = sim_stats.wp_fill;
+  roi_stats.wp_evicted = sim_stats.wp_evicted;
+
+  if(polluation.size()){
+       roi_stats.avg_pollution = (float_t)std::accumulate(polluation.begin(),polluation.end(),0)/polluation.size();
+  }
+
   for (auto* ul : upper_levels) {
     ul->roi_stats.RQ_ACCESS = ul->sim_stats.RQ_ACCESS;
     ul->roi_stats.RQ_MERGED = ul->sim_stats.RQ_MERGED;
@@ -805,6 +911,7 @@ void CACHE::end_phase(unsigned finished_cpu)
     ul->roi_stats.WQ_TO_CACHE = ul->sim_stats.WQ_TO_CACHE;
     ul->roi_stats.WQ_FORWARD = ul->sim_stats.WQ_FORWARD;
   }
+
 }
 
 template <typename T>

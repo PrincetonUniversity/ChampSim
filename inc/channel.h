@@ -59,6 +59,7 @@ class channel
     access_type type{access_type::LOAD};
 
     uint32_t pf_metadata = 0;
+    bool wrong_path = false;
     uint32_t cpu = std::numeric_limits<uint32_t>::max();
 
     uint64_t address = 0;

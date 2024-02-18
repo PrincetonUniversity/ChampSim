@@ -112,7 +112,13 @@ void O3_CPU::initialize_instruction()
 {
   //auto instrs_to_read_this_cycle = std::min(FETCH_WIDTH, static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER)));
   auto instrs_to_read_this_cycle = static_cast<long>(IFETCH_BUFFER_SIZE - std::size(IFETCH_BUFFER));
-
+  if(bpu_correction_interruped){
+    // In previous cycle flushing of instruction was interrupted, resume flushing.
+    while(!input_queue.empty() && (input_queue.front().is_wrong_path || input_queue.front().is_prefetch)){
+      input_queue.pop_front();
+    }
+    bpu_correction_interruped = input_queue.empty();
+  }
 
   if(fetch_resume_cycle == std::numeric_limits<uint64_t>::max()){
      sim_stats.fetch_mispred_block_cycles++; 
@@ -223,15 +229,18 @@ void O3_CPU::initialize_instruction()
 	    break;
     }
 
+    bool force_correct_branch = false;
     if(enable_wrong_path){
         if (inst.branch_mispredicted || inst.before_wrong_path){
-            
-            //if(inst.branch_msipredicted && inst.branch != BRANCH_CONDITIONAL){
-            //    inst.branch_prediction = true;	
-            //}
-
+          float scaledValue = static_cast<float>(rand()) / RAND_MAX;
+          force_correct_branch = (scaledValue < bpu_correction_probability) ? 1 : 0;
+          if(force_correct_branch){
+            inst.branch_mispredicted = 0;
+            inst.before_wrong_path = 0;
+          } else {
             in_wrong_path = true;
             restart = false;
+          }
         }
 
         if(inst.is_wrong_path && std::size(inst.source_memory)){
@@ -270,12 +279,20 @@ void O3_CPU::initialize_instruction()
 
     // Update stats of non mispredicting branches here
     if(!inst.branch_mispredicted){
-        update_branch_stats(input_queue.front());
+        update_branch_stats(inst);
     }
 
     // Add to IFETCH_BUFFER
-    IFETCH_BUFFER.push_back(input_queue.front());
+    IFETCH_BUFFER.push_back(inst);
     input_queue.pop_front();
+
+    if(force_correct_branch){
+      while(!input_queue.empty() && (input_queue.front().is_wrong_path || input_queue.front().is_prefetch)){
+        input_queue.pop_front();
+      }
+      // Inst. queue might get empty while flushing if so we need to flus in next cycle until all wrong path instr are flushed
+      bpu_correction_interruped = input_queue.empty();
+    }
 
     IFETCH_BUFFER.back().event_cycle = current_cycle;
   }
@@ -498,6 +515,7 @@ bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, s
   fetch_packet.v_address = begin->ip;
   fetch_packet.instr_id = begin->instr_id;
   fetch_packet.ip = begin->ip;
+  fetch_packet.wrong_path = begin->is_wrong_path;
 
   last_fetch_packet = fetch_packet;
 
@@ -940,6 +958,7 @@ bool O3_CPU::do_complete_store(const LSQ_ENTRY& sq_entry)
   data_packet.v_address = sq_entry.virtual_address;
   data_packet.instr_id = sq_entry.instr_id;
   data_packet.ip = sq_entry.ip;
+  data_packet.wrong_path = sq_entry.is_wrong_path;
 
   if constexpr (champsim::debug_print) {
     fmt::print("[SQ] {} instr_id: {} vaddr: {:x}\n", __func__, data_packet.instr_id, data_packet.v_address);
@@ -954,6 +973,7 @@ bool O3_CPU::execute_load(const LSQ_ENTRY& lq_entry)
   data_packet.v_address = lq_entry.virtual_address;
   data_packet.instr_id = lq_entry.instr_id;
   data_packet.ip = lq_entry.ip;
+  data_packet.wrong_path = lq_entry.is_wrong_path;
 
   if constexpr (champsim::debug_print) {
     fmt::print("[LQ] {} instr_id: {} vaddr: {:#x}\n", __func__, data_packet.instr_id, data_packet.v_address);
@@ -1205,7 +1225,9 @@ long O3_CPU::retire_rob()
 
     if(it->branch_mispredicted || it->before_wrong_path){
 	    if(!it->squashed){
-	        print_deadlock();
+        std::cout << "Retiring a branch_mispredicted which is NOT Squashed\n";
+        std::cout << "ID : " << it->instr_id <<" " << it->branch_prediction << "\n";
+        exit(-1);
 	    }
         assert(it->squashed && "This should have been squashed\n");
     }
