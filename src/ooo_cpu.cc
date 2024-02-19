@@ -32,6 +32,7 @@
 #include "util/span.h"
 
 //#define BGODALA 0
+//#define WP_HACK 0
 
 std::chrono::seconds elapsed_time();
 
@@ -621,12 +622,16 @@ long O3_CPU::dispatch_instruction()
     ROB.push_back(std::move(DISPATCH_BUFFER.front()));
     auto &inst = ROB.back();
 
+    //Hack to enable wrong path instructions
+    //to be executed whenever possible
+#ifdef WP_HACK
     if( (inst.is_wrong_path || inst.is_prefetch) && !inst.num_mem_ops()){
         inst.executed = true;
         //inst.scheduled = true;
         //inst.completed = true;
         available_dispatch_bandwidth++;
     }
+#endif
     DISPATCH_BUFFER.pop_front();
     do_memory_scheduling(ROB.back());
 
@@ -671,6 +676,7 @@ void O3_CPU::do_scheduling(ooo_model_instr& instr)
   //fmt::print("sched instr_id {}\n", instr.instr_id);
   // Don't track dependeces for instructions in the wrong path
   // Hack to let only memory instructions be executed
+#ifdef WP_HACK
   if(instr.is_wrong_path || instr.is_prefetch){
     instr.scheduled = true;
     //instr.executed = true;
@@ -678,6 +684,7 @@ void O3_CPU::do_scheduling(ooo_model_instr& instr)
     instr.event_cycle = current_cycle; 
     return;
   }
+#endif
   // Mark register dependencies
   for (auto src_reg : instr.source_registers) {
     if (!std::empty(reg_producers.at(src_reg))) {
@@ -1029,14 +1036,16 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
             	      fmt::print("FLUSH instr_id: {} is_wrong_path: {}\n", x.instr_id, x.is_wrong_path);  
 #endif
             	      std::cout <<std::flush;
-                      //for (auto dreg : x.destination_registers) {
-                      //  auto begin = std::begin(reg_producers.at(dreg));
-                      //  auto end = std::end(reg_producers.at(dreg));
-                      //  auto elem = std::find_if(begin, end, [id = x.instr_id](ooo_model_instr& y) { return y.instr_id == id; });
-                      //  if(elem != end){
-                      //    reg_producers.at(dreg).erase(elem);
-                      //  }
-                      //}
+                      //Remove dependences by wrong path instructions which
+                      //are tracked by reg_producers
+                      for (auto dreg : x.destination_registers) {
+                        auto begin = std::begin(reg_producers.at(dreg));
+                        auto end = std::end(reg_producers.at(dreg));
+                        auto elem = std::find_if(begin, end, [wp_id = x.instr_id](ooo_model_instr* y) { return y->instr_id == wp_id; });
+                        if(elem != end){
+                          reg_producers.at(dreg).erase(elem);
+                        }
+                      }
              	    } else {
 		      
 		      auto first_wp_inst = find_if(std::begin(x.registers_instrs_depend_on_me), std::end(x.registers_instrs_depend_on_me), [id = id](auto &y){ auto &z = y.get(); return z.instr_id > id; });
