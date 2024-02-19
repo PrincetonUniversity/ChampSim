@@ -192,6 +192,7 @@ void O3_CPU::initialize_instruction()
            break;
         }
       }
+
     //if(last_branch){
     //    WPATH_MAP[last_branch].push_back(input_queue.front());    
     //}
@@ -477,6 +478,11 @@ long O3_CPU::fetch_instruction()
 
 bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, std::deque<ooo_model_instr>::iterator end)
 {
+
+    //if(begin->is_prefetch){
+    //    std::for_each(begin, end, [](auto& x) { x.fetch_issued = true; x.fetch_completed = true; });
+    //    return true;
+    //}
   //BGODALA
   //fmt::print("[IFETCH] {} instr_id: {} fid: {} ip: {:#x} block: {:#x} cycle: {}\n", __func__, begin->instr_id, begin->fetch_instr_id, begin->ip, (begin->ip >> LOG2_BLOCK_SIZE) << LOG2_BLOCK_SIZE, current_cycle);
   if(prev_fetch_block && begin->ip >> LOG2_BLOCK_SIZE == prev_fetch_block){
@@ -507,6 +513,10 @@ bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, s
 
 long O3_CPU::promote_to_decode()
 {
+
+  //Erase is_prefetch entries whose fetch was completed
+    IFETCH_BUFFER.erase(std::remove_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), [](const auto& x) { return x.fetch_completed && x.is_prefetch; }), std::end(IFETCH_BUFFER));
+
   auto available_fetch_bandwidth = std::min<long>(FETCH_WIDTH, static_cast<long>(DECODE_BUFFER_SIZE - std::size(DECODE_BUFFER)));
   auto [window_begin, window_end] = champsim::get_span_p(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), available_fetch_bandwidth,
                                                          [cycle = current_cycle](const auto& x) { return x.fetch_completed && x.event_cycle <= cycle; });
@@ -1169,6 +1179,10 @@ long O3_CPU::retire_rob()
   auto retire_count = 0;
   auto it = retire_begin;
   while (it != retire_end){
+    //fmt::print("cycle: {} br_pc: {:#x} is_branch: {} is_mispred: {} is_wrong_path: {} is_prefetch: {}\n", current_cycle, it->ip, it->is_branch, it->branch_mispredicted, it->is_wrong_path, it->is_prefetch);
+    //if(it->is_branch){
+    //    fmt::print("cycle: {} br_pc: {:#x} is_mispred: {}\n", current_cycle, it->ip, it->branch_mispredicted);
+    //}
 
     if(std::size(it->source_memory)){
         sim_stats.loads_retired++;

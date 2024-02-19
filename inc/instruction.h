@@ -177,6 +177,10 @@ private:
 
     is_prefetch = instr.pref;
 
+    if(is_prefetch){
+        is_wrong_path = true;
+    }
+
     int brCode = instr.is_branch;
 
     if(brCode & 0x1){
