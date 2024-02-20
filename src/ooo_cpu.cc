@@ -544,7 +544,7 @@ long O3_CPU::decode_instruction()
     this->do_dib_update(db_entry);
 
     // Resume fetch
-    if (db_entry.branch_mispredicted && !db_entry.is_wrong_path) {
+    if ((db_entry.branch_mispredicted && !db_entry.is_wrong_path )) {
       // These branches detect the misprediction at decode
       if ((db_entry.branch == BRANCH_DIRECT_JUMP) 
           || (db_entry.branch == BRANCH_DIRECT_CALL)
