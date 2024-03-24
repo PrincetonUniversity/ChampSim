@@ -1340,6 +1340,7 @@ void O3_CPU::print_deadlock()
 void O3_CPU::resize_cpu()
 {
   IN_QUEUE_SIZE = 10 * ROB_SIZE;
+  LQ.resize(LQ_SIZE);
 }
 
 LSQ_ENTRY::LSQ_ENTRY(uint64_t id, uint64_t addr, uint64_t local_ip, std::array<uint8_t, 2> local_asid, bool is_wrong_path_)

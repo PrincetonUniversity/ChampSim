@@ -21,6 +21,7 @@ void Options::init(CLI::App& app)
   app.add_option("--dispatch-buffer-size", dispatch_buffer_size, "The size of the dispatch buffer");
   app.add_option("--decode-buffer-size", decode_buffer_size, "The size of the decode buffer");
   app.add_option("--rob-size", rob_size, "The size of the reorder buffer");
+  app.add_option("--lq-size", lq_size, "The size of the load queue");
   app.add_option("--sq-size", sq_size, "The size of the store queue");
 
   app.add_option("--fetch-width", fetch_width, "The width of the instruction fetch unit");
@@ -72,6 +73,8 @@ void Options::update(environment& env)
       cpu.DECODE_BUFFER_SIZE = decode_buffer_size;
     if (rob_size)
       cpu.ROB_SIZE = rob_size;
+    if (lq_size)
+      cpu.LQ_SIZE = lq_size;
     if (sq_size)
       cpu.SQ_SIZE = sq_size;
 

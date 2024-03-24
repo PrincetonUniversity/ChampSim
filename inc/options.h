@@ -15,6 +15,7 @@ private:
   std::size_t dispatch_buffer_size;
   std::size_t decode_buffer_size;
   std::size_t rob_size;
+  std::size_t lq_size;
   std::size_t sq_size;
 
   long int fetch_width;
