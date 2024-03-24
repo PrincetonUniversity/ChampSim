@@ -187,17 +187,17 @@ public:
   std::array<std::vector<ooo_model_instr*>, std::numeric_limits<uint8_t>::max() + 1> reg_producers;
 
   // Constants
-  const std::size_t IFETCH_BUFFER_SIZE, DISPATCH_BUFFER_SIZE, DECODE_BUFFER_SIZE, ROB_SIZE, SQ_SIZE;
-  const long int FETCH_WIDTH, DECODE_WIDTH, DISPATCH_WIDTH, SCHEDULER_SIZE, EXEC_WIDTH;
-  const long int LQ_WIDTH, SQ_WIDTH;
-  const long int RETIRE_WIDTH;
-  const unsigned BRANCH_MISPREDICT_PENALTY, DISPATCH_LATENCY, DECODE_LATENCY, SCHEDULING_LATENCY, EXEC_LATENCY;
-  const long int L1I_BANDWIDTH, L1D_BANDWIDTH;
+  std::size_t IFETCH_BUFFER_SIZE, DISPATCH_BUFFER_SIZE, DECODE_BUFFER_SIZE, ROB_SIZE, SQ_SIZE;
+  long int FETCH_WIDTH, DECODE_WIDTH, DISPATCH_WIDTH, SCHEDULER_SIZE, EXEC_WIDTH;
+  long int LQ_WIDTH, SQ_WIDTH;
+  long int RETIRE_WIDTH;
+  unsigned BRANCH_MISPREDICT_PENALTY, DISPATCH_LATENCY, DECODE_LATENCY, SCHEDULING_LATENCY, EXEC_LATENCY;
+  long int L1I_BANDWIDTH, L1D_BANDWIDTH;
 
   // branch
   uint64_t fetch_resume_cycle = 0;
 
-  const long IN_QUEUE_SIZE = 10 * ROB_SIZE;
+  long IN_QUEUE_SIZE = 10 * ROB_SIZE;
   std::deque<ooo_model_instr> input_queue;
 
   CacheBus L1I_bus, L1D_bus;
@@ -243,6 +243,7 @@ public:
   [[nodiscard]] auto sim_cycle() const { return current_cycle - sim_stats.begin_cycles; }
 
   void print_deadlock() final;
+  void resize_cpu();
 
 #if __has_include("ooo_cpu_module_decl.inc")
 #include "ooo_cpu_module_decl.inc"
