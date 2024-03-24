@@ -80,3 +80,10 @@ long drrip::find_victim(uint32_t triggering_cpu, uint64_t instr_id, long set, co
   assert(victim < end);
   return std::distance(begin, victim); // cast protected by assertions
 }
+
+void drrip::resize(long sets, long ways)
+{
+  NUM_SET = sets;
+  NUM_WAY = ways;
+  rrpv.resize(static_cast<std::size_t>(NUM_SET * NUM_WAY));
+}

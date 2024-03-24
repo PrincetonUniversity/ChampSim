@@ -8,6 +8,10 @@ void Options::set(environment& env)
   for (O3_CPU& cpu : env.cpu_view()) {
     cpu.resize_cpu();
   }
+
+  for (CACHE& cache : env.cache_view()) {
+    cache.resize_cache();
+  }
 }
 
 void Options::init(CLI::App& app)
@@ -38,6 +42,23 @@ void Options::init(CLI::App& app)
 
   app.add_option("--l1i-bandwidth", l1i_bandwidth, "The bandwidth of the L1 instruction cache");
   app.add_option("--l1d-bandwidth", l1d_bandwidth, "The bandwidth of the L1 data cache");
+
+  // Cache parameters
+  app.add_option("--l1i-sets", l1i_sets, "The number of sets in the L1 instruction cache");
+  app.add_option("--l1i-ways", l1i_ways, "The number of ways in the L1 instruction cache");
+  app.add_option("--l1i-mshr-size", l1i_mshr_size, "The size of the MSHR in the L1 instruction cache");
+
+  app.add_option("--l1d-sets", l1d_sets, "The number of sets in the L1 data cache");
+  app.add_option("--l1d-ways", l1d_ways, "The number of ways in the L1 data cache");
+  app.add_option("--l1d-mshr-size", l1d_mshr_size, "The size of the MSHR in the L1 data cache");
+
+  app.add_option("--l2c-sets", l2c_sets, "The number of sets in the L2 cache");
+  app.add_option("--l2c-ways", l2c_ways, "The number of ways in the L2 cache");
+  app.add_option("--l2c-mshr-size", l2c_mshr_size, "The size of the MSHR in the L2 cache");
+
+  app.add_option("--llc-sets", llc_sets, "The number of sets in the LLC");
+  app.add_option("--llc-ways", llc_ways, "The number of ways in the LLC");
+  app.add_option("--llc-mshr-size", llc_mshr_size, "The size of the MSHR in the LLC");
 }
 
 void Options::update(environment& env)
@@ -88,6 +109,38 @@ void Options::update(environment& env)
       cpu.L1I_BANDWIDTH = l1i_bandwidth;
     if (l1d_bandwidth)
       cpu.L1D_BANDWIDTH = l1d_bandwidth;
+  }
+
+  for (CACHE& cache : env.cache_view()) {
+    if (cache.NAME == "cpu0_L1I") {
+      if (l1i_sets)
+        cache.NUM_SET = l1i_sets;
+      if (l1i_ways)
+        cache.NUM_WAY = l1i_ways;
+      if (l1i_mshr_size)
+        cache.MSHR_SIZE = l1i_mshr_size;
+    } else if (cache.NAME == "cpu0_L1D") {
+      if (l1d_sets)
+        cache.NUM_SET = l1d_sets;
+      if (l1d_ways)
+        cache.NUM_WAY = l1d_ways;
+      if (l1d_mshr_size)
+        cache.MSHR_SIZE = l1d_mshr_size;
+    } else if (cache.NAME == "cpu0_L2C") {
+      if (l2c_sets)
+        cache.NUM_SET = l2c_sets;
+      if (l2c_ways)
+        cache.NUM_WAY = l2c_ways;
+      if (l2c_mshr_size)
+        cache.MSHR_SIZE = l2c_mshr_size;
+    } else if (cache.NAME == "LLC") {
+      if (llc_sets)
+        cache.NUM_SET = llc_sets;
+      if (llc_ways)
+        cache.NUM_WAY = llc_ways;
+      if (llc_mshr_size)
+        cache.MSHR_SIZE = llc_mshr_size;
+    }
   }
 
   set(env);

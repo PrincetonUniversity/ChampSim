@@ -84,3 +84,11 @@ void ship::update_replacement_state(uint32_t triggering_cpu, long set, long way,
       get_rrpv(set, way) = maxRRPV;
   }
 }
+
+void ship::resize(long sets, long ways)
+{
+  NUM_SET = sets;
+  NUM_WAY = ways;
+  sampler.resize(SAMPLER_SET * static_cast<std::size_t>(NUM_WAY));
+  rrpv_values.resize(static_cast<std::size_t>(NUM_SET * NUM_WAY), maxRRPV);
+}

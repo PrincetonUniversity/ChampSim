@@ -34,6 +34,8 @@ struct srrip : champsim::modules::replacement {
 
   // use this function to print out your own stats at the end of simulation
   // void replacement_final_stats() {}
+
+  void resize(long sets, long ways);
 };
 
 #endif

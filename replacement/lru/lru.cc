@@ -26,3 +26,10 @@ void lru::update_replacement_state(uint32_t triggering_cpu, long set, long way, 
   if (!hit || access_type{type} != access_type::WRITE) // Skip this for writeback hits
     last_used_cycles.at((std::size_t)(set * NUM_WAY + way)) = cycle++;
 }
+
+void lru::resize(long sets, long ways)
+{
+  NUM_SET = sets;
+  NUM_WAY = ways;
+  last_used_cycles.resize(static_cast<std::size_t>(NUM_SET * NUM_WAY), 0);
+}

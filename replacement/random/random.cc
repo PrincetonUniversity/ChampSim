@@ -9,3 +9,8 @@ long random::find_victim(uint32_t triggering_cpu, uint64_t instr_id, long set, c
 {
   return dist(rng);
 }
+
+void random::resize(long sets, long ways)
+{
+  dist = std::uniform_int_distribution<long>(0, ways - 1);
+}

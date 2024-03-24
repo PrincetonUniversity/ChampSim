@@ -92,9 +92,7 @@ int main(int argc, char** argv)
   app.add_option("traces", trace_names, "The paths to the traces")->required()->expected(NUM_CPUS)->check(CLI::ExistingFile);
 
   options.init(app);
-
   CLI11_PARSE(app, argc, argv);
-
   options.update(gen_environment);
 
   const bool warmup_given = (warmup_instr_option->count() > 0) || (deprec_warmup_instr_option->count() > 0);

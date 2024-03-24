@@ -170,6 +170,11 @@ struct replacement {
   static auto final_stats_member_impl(long) -> std::false_type;
 
   template <typename T, typename... Args>
+  static auto resize_member_impl(int) -> decltype(std::declval<T>().resize(std::declval<Args>()...), std::true_type{});
+  template <typename, typename...>
+  static auto resize_member_impl(long) -> std::false_type;
+
+  template <typename T, typename... Args>
   constexpr static bool has_initialize = decltype(initialize_member_impl<T, Args...>(0))::value;
 
   template <typename T, typename... Args>
@@ -180,6 +185,9 @@ struct replacement {
 
   template <typename T, typename... Args>
   constexpr static bool has_final_stats = decltype(final_stats_member_impl<T, Args...>(0))::value;
+
+  template <typename T, typename... Args>
+  constexpr static bool has_resize = decltype(resize_member_impl<T, Args...>(0))::value;
 };
 } // namespace champsim::modules
 

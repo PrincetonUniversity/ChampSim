@@ -37,6 +37,23 @@ private:
   long int l1i_bandwidth;
   long int l1d_bandwidth;
 
+  // Cache parameters
+  uint32_t l1i_sets;
+  uint32_t l1i_ways;
+  uint32_t l1i_mshr_size;
+
+  uint32_t l1d_sets;
+  uint32_t l1d_ways;
+  uint32_t l1d_mshr_size;
+
+  uint32_t l2c_sets;
+  uint32_t l2c_ways;
+  uint32_t l2c_mshr_size;
+
+  uint32_t llc_sets;
+  uint32_t llc_ways;
+  uint32_t llc_mshr_size;
+
   void set(environment& env);
 
 public:

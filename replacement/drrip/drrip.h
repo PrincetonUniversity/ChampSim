@@ -39,6 +39,7 @@ public:
 
   void update_bip(long set, long way);
   void update_srrip(long set, long way);
+  void resize(long sets, long ways);
 };
 
 #endif

@@ -842,4 +842,11 @@ void CACHE::print_deadlock()
     champsim::range_print_deadlock(ul->PQ, NAME + "_PQ", q_writer, q_entry_pack);
   }
 }
+
+void CACHE::resize_cache()
+{
+  block.resize(NUM_SET * NUM_WAY);
+  repl_module_pimpl->impl_resize(NUM_SET, NUM_WAY);
+}
+
 // LCOV_EXCL_STOP
