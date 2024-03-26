@@ -184,7 +184,6 @@ private:
     //    is_wrong_path = true;
     //}
 
-
     int brCode = instr.is_branch;
 
     if(brCode & 0x1){

@@ -1288,6 +1288,11 @@ long O3_CPU::retire_rob()
   //std::for_each(retire_begin, retire_end, [](const auto& x) { fmt::print("[ROB] retire_rob instr_ip: {:x} is retired\n", x.ip); });
 
   num_retired += retire_count;
+
+  if(num_retired%1000 == 0){
+    l1i->avgCachePoll(); 
+  }
+
   ROB.erase(retire_begin, retire_end);
 
   if(retire_count == 0){

@@ -35,6 +35,10 @@
 #include "util/bits.h" // for bitmask, lg2, splice_bits
 #include "util/span.h"
 
+CACHE *L1D;
+CACHE *L2C;
+CACHE *LLC;
+
 CACHE::tag_lookup_type::tag_lookup_type(const request_type& req, bool local_pref, bool skip)
     : address(req.address), v_address(req.v_address), data(req.data), ip(req.ip), instr_id(req.instr_id), pf_metadata(req.pf_metadata), wrong_path(req.wrong_path),
       cpu(req.cpu), type(req.type), prefetch_from_this(local_pref), skip_fill(skip), is_translated(req.is_translated), instr_depend_on_me(req.instr_depend_on_me)
@@ -112,6 +116,20 @@ uint64_t CACHE::module_address(const T& element) const
 
 bool CACHE::handle_fill(const mshr_type& fill_mshr)
 {
+
+  if((NAME.find("L1D") != std::string::npos) && L1D == nullptr){
+      std::cout << "Setting L1D ptr " << this  <<"\n";
+      L1D = this;
+  }
+  if((NAME.find("L2C") != std::string::npos) && L2C == nullptr){
+      std::cout << "Setting L2C ptr " << this  <<"\n";
+      L2C = this;
+  }
+  if((NAME.find("LLC") != std::string::npos) && LLC == nullptr){
+      std::cout << "Setting LLC ptr " << this  <<"\n";
+      LLC = this;  
+  }
+
   cpu = fill_mshr.cpu;
 
   // find victim
@@ -170,13 +188,17 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
       ++sim_stats.pf_useless;
     }
 
+    if (way->valid && way->wrong_path && !way->wrong_path_usefull){
+      ++sim_stats.wp_useless;
+    }
+
     if (fill_mshr.type == access_type::PREFETCH) {
       ++sim_stats.pf_fill;
     }
 
     bool fill_wrong_path = fill_mshr.wrong_path;
-    bool evicted_right_path = !way->wrong_path && way != set_end && way->valid;
-    bool evicted_wrong_path = way->wrong_path && way != set_end && way->valid;
+    bool evicted_right_path = (!way->wrong_path || way->wrong_path_usefull) && way != set_end && way->valid;
+    bool evicted_wrong_path = (way->wrong_path && !way->wrong_path_usefull) && way != set_end && way->valid;
 
     if(fill_mshr.wrong_path){
       ++sim_stats.wp_fill;
@@ -221,8 +243,8 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
       cache_pollution.back() = temp;
       if(sim_stats.num_fill > next_comp_fill && !warmup){
         //std::cout << "NAME :" <<  ((float_t)cache_pollution.back()[2]/(float_t)(cache_pollution.back()[1]+cache_pollution.back()[2]))*100 << "\n";
-        polluation.push_back(((float_t)cache_pollution.back()[2]/(float_t)(cache_pollution.back()[1]+cache_pollution.back()[2]))*100);
-        next_comp_fill = next_comp_fill + 1000;
+        //polluation.push_back(((float_t)cache_pollution.back()[2]/(float_t)(cache_pollution.back()[1]+cache_pollution.back()[2]))*100);
+        //next_comp_fill = next_comp_fill + 1000;
       }
 
       last_entry_clk = current_cycle;
@@ -242,7 +264,25 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
   return true;
 }
 
-bool CACHE::try_hit(const tag_lookup_type& handle_pkt)
+void CACHE::avgCachePoll(){
+  
+  //float_t denominator = static_cast<float_t>(cache_pollution.back()[1] + cache_pollution.back()[2]);
+  float_t denominator = NUM_SET * NUM_WAY;
+  float_t val = 0;
+  if(denominator != 0){
+    val = (static_cast<float_t>(cache_pollution.back()[2]) / denominator) * 100;
+  }
+
+  polluation.push_back(val);
+
+  if(NAME.find("L1I") != std::string::npos){
+    if(L1D != nullptr) L1D->avgCachePoll();
+    if(L2C != nullptr) L2C->avgCachePoll();
+    if(LLC != nullptr) LLC->avgCachePoll();
+  }
+}
+
+bool CACHE::try_hit(const tag_lookup_type& handle_pkt, bool no_stat_upd)
 {
   cpu = handle_pkt.cpu;
 
@@ -259,28 +299,44 @@ bool CACHE::try_hit(const tag_lookup_type& handle_pkt)
   }
 
   auto metadata_thru = handle_pkt.pf_metadata;
-  if (should_activate_prefetcher(handle_pkt)) {
+  if (should_activate_prefetcher(handle_pkt) && !no_stat_upd) {
     metadata_thru = impl_prefetcher_cache_operate(module_address(handle_pkt), handle_pkt.ip, hit, useful_prefetch, handle_pkt.type, metadata_thru);
   }
 
   if (hit) {
-    ++sim_stats.hits.at(champsim::to_underlying(handle_pkt.type)).at(handle_pkt.cpu);
-
-    // update replacement policy
-    const auto way_idx = std::distance(set_begin, way);
-    impl_update_replacement_state(handle_pkt.cpu, get_set_index(handle_pkt.address), way_idx, module_address(*way), handle_pkt.ip, 0, handle_pkt.type, true);
-
-    response_type response{handle_pkt.address, handle_pkt.v_address, way->data, metadata_thru, handle_pkt.instr_depend_on_me};
-    for (auto* ret : handle_pkt.to_return) {
-      ret->push_back(response);
+    if(way->wrong_path && !handle_pkt.wrong_path){
+      if(!way->wrong_path_usefull) {
+        ++sim_stats.wp_useful;
+        ++cache_pollution.back()[1];
+        --cache_pollution.back()[2];
+        if((NAME.find("L1I") != std::string::npos) || (NAME.find("L1D") != std::string::npos)){
+          //handle_pkt.type = access_type::LOAD;
+          if(L2C != nullptr) L2C->try_hit(handle_pkt,1);
+          if(LLC != nullptr) LLC->try_hit(handle_pkt,1);
+        }
+      }
+      way->wrong_path_usefull = true;
     }
 
-    way->dirty |= (handle_pkt.type == access_type::WRITE);
-
-    // update prefetch stats and reset prefetch bit
-    if (useful_prefetch) {
-      ++sim_stats.pf_useful;
-      way->prefetch = false;
+    if(!no_stat_upd){ 
+      ++sim_stats.hits.at(champsim::to_underlying(handle_pkt.type)).at(handle_pkt.cpu);
+    
+      // update replacement policy
+      const auto way_idx = std::distance(set_begin, way);
+      impl_update_replacement_state(handle_pkt.cpu, get_set_index(handle_pkt.address), way_idx, module_address(*way), handle_pkt.ip, 0, handle_pkt.type, true);
+    
+      response_type response{handle_pkt.address, handle_pkt.v_address, way->data, metadata_thru, handle_pkt.instr_depend_on_me};
+      for (auto* ret : handle_pkt.to_return) {
+        ret->push_back(response);
+      }
+    
+      way->dirty |= (handle_pkt.type == access_type::WRITE);
+    
+      // update prefetch stats and reset prefetch bit
+      if (useful_prefetch) {
+        ++sim_stats.pf_useful;
+        way->prefetch = false;
+      }
     }
   }
 
@@ -321,6 +377,7 @@ bool CACHE::handle_miss(const tag_lookup_type& handle_pkt)
   }
 
   mshr_type to_allocate{handle_pkt, current_cycle};
+  to_allocate.wrong_path = handle_pkt.wrong_path;
 
   cpu = handle_pkt.cpu;
 
@@ -888,6 +945,8 @@ void CACHE::end_phase(unsigned finished_cpu)
   roi_stats.wp_load = sim_stats.wp_load;
   roi_stats.wp_store = sim_stats.wp_store;
   roi_stats.wp_fill = sim_stats.wp_fill;
+  roi_stats.wp_useless = sim_stats.wp_useless;
+  roi_stats.wp_useful = sim_stats.wp_useful;
   roi_stats.wp_evicted = sim_stats.wp_evicted;
 
   if(polluation.size()){
