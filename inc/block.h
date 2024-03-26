@@ -24,6 +24,7 @@ struct cache_block {
   bool prefetch = false;
   bool dirty = false;
   bool wrong_path = false;
+  bool wrong_path_usefull = false;
 
   uint64_t address = 0;
   uint64_t v_address = 0;
