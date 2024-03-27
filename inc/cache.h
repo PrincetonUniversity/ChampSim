@@ -168,7 +168,7 @@ public:
 
   uint32_t cpu = 0;
   const std::string NAME;
-  const uint32_t NUM_SET, NUM_WAY, MSHR_SIZE;
+  uint32_t NUM_SET, NUM_WAY, MSHR_SIZE;
   const std::size_t PQ_SIZE;
   const uint64_t HIT_LATENCY, FILL_LATENCY;
   const unsigned OFFSET_BITS;
@@ -223,6 +223,7 @@ public:
   prefetch_line(uint64_t ip, uint64_t base_addr, uint64_t pf_addr, bool fill_this_level, uint32_t prefetch_metadata);
 
   void print_deadlock() final;
+  void resize_cache();
 
 #if __has_include("cache_module_decl.inc")
 #include "cache_module_decl.inc"
@@ -249,6 +250,7 @@ public:
     virtual void impl_update_replacement_state(uint32_t triggering_cpu, long set, long way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr,
                                                access_type type, bool hit) = 0;
     virtual void impl_replacement_final_stats() = 0;
+    virtual void impl_resize(uint32_t sets, uint32_t ways) = 0;
   };
 
   template <typename... Ps>
@@ -279,6 +281,7 @@ public:
     void impl_update_replacement_state(uint32_t triggering_cpu, long set, long way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, access_type type,
                                        bool hit) final;
     void impl_replacement_final_stats() final;
+    void impl_resize(uint32_t sets, uint32_t ways) final;
   };
 
   std::unique_ptr<prefetcher_module_concept> pref_module_pimpl;
@@ -299,6 +302,7 @@ public:
   void impl_update_replacement_state(uint32_t triggering_cpu, long set, long way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, access_type type,
                                      bool hit) const;
   void impl_replacement_final_stats() const;
+  void impl_resize(uint32_t sets, uint32_t ways) const;
   // NOLINTEND(readability-make-member-function-const)
 
   template <typename... Ps, typename... Rs>
@@ -449,6 +453,19 @@ void CACHE::replacement_module_model<Rs...>::impl_replacement_final_stats()
 
   std::apply([&](auto&... r) { (..., process_one(r)); }, intern_);
 }
+
+template <typename... Rs>
+void CACHE::replacement_module_model<Rs...>::impl_resize(uint32_t sets, uint32_t ways)
+{
+  [[maybe_unused]] auto process_one = [&](auto& r) {
+    using namespace champsim::modules;
+    if constexpr (replacement::has_resize<decltype(r), uint32_t, uint32_t>)
+      r.resize(sets, ways);
+  };
+
+  std::apply([&](auto&... r) { (..., process_one(r)); }, intern_);
+}
+
 #endif
 
 #ifdef SET_ASIDE_CHAMPSIM_MODULE

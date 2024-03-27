@@ -18,6 +18,8 @@ struct random : champsim::modules::replacement {
   // void update_replacement_state(uint32_t triggering_cpu, long set, long way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, access_type type, uint8_t
   // hit);
   //  void replacement_final_stats()
+
+  void resize(long sets, long ways);
 };
 
 #endif

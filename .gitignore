@@ -17,3 +17,7 @@ vcpkg_installed/
 
 **/_build
 
+_*/
+jobs/
+.venv/
+.vscode/

@@ -44,3 +44,8 @@ long srrip_set_helper::victim()
 }
 
 void srrip_set_helper::update(long way, bool hit) { get_rrpv(way) = hit ? 0 : (maxRRPV - 1); }
+
+void srrip::resize(long sets, long ways)
+{
+  this->sets.resize(static_cast<std::size_t>(sets), srrip_set_helper{ways});
+}

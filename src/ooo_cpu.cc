@@ -1337,6 +1337,14 @@ void O3_CPU::print_deadlock()
 }
 // LCOV_EXCL_STOP
 
+void O3_CPU::resize_cpu()
+{
+  IN_QUEUE_SIZE = 10 * ROB_SIZE;
+
+  LQ.clear();
+  LQ.resize(LQ_SIZE);
+}
+
 LSQ_ENTRY::LSQ_ENTRY(uint64_t id, uint64_t addr, uint64_t local_ip, std::array<uint8_t, 2> local_asid, bool is_wrong_path_)
     : instr_id(id), virtual_address(addr), ip(local_ip), asid(local_asid), is_wrong_path(is_wrong_path_)
 {
