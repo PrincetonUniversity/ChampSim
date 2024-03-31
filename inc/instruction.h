@@ -180,9 +180,9 @@ private:
     //std::cout << "0x"<< std::hex << ip << " is_branch: " << (instr.is_branch != 0)
     //    << " is_prefetch: " << is_prefetch << "is_wrong_path: "<< is_wrong_path << std::endl ;
 
-    //if(is_prefetch){
-    //    is_wrong_path = true;
-    //}
+    if(is_prefetch){
+        is_wrong_path = true;
+    }
 
     int brCode = instr.is_branch;
 
