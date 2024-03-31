@@ -468,6 +468,7 @@ long O3_CPU::fetch_instruction()
     auto success = do_fetch_instruction(l1i_req_begin, l1i_req_end);
     if (success) {
       std::for_each(l1i_req_begin, l1i_req_end, [](auto& x) { x.fetch_issued = true; });
+      sim_stats.instr_foot_print.insert(l1i_req_begin->ip >> LOG2_BLOCK_SIZE);
       //prev_fetch_block = l1i_req_begin->ip >> LOG2_BLOCK_SIZE;
       ++progress;
     }else{
@@ -912,6 +913,7 @@ long O3_CPU::operate_lsq()
           sim_stats.loads_success++;
         --load_bw;
         lq_entry->fetch_issued = true;
+        sim_stats.data_foot_print.insert(lq_entry->ip >> LOG2_BLOCK_SIZE);
         //lq_entry->finish(std::begin(ROB), std::end(ROB));
         //lq_entry.reset();
 
@@ -964,7 +966,12 @@ bool O3_CPU::do_complete_store(const LSQ_ENTRY& sq_entry)
     fmt::print("[SQ] {} instr_id: {} vaddr: {:x}\n", __func__, data_packet.instr_id, data_packet.v_address);
   }
 
-  return L1D_bus.issue_write(data_packet);
+  bool success = L1D_bus.issue_write(data_packet);
+  if(success){
+    sim_stats.data_foot_print.insert(data_packet.ip >> LOG2_BLOCK_SIZE);
+  }
+
+  return success;
 }
 
 bool O3_CPU::execute_load(const LSQ_ENTRY& lq_entry)
@@ -1367,6 +1374,8 @@ void O3_CPU::print_deadlock()
 void O3_CPU::resize_cpu()
 {
   IN_QUEUE_SIZE = 10 * ROB_SIZE;
+
+  LQ.clear();
   LQ.resize(LQ_SIZE);
 }
 
