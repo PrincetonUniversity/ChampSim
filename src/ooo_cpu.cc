@@ -136,8 +136,12 @@ void O3_CPU::initialize_instruction()
           if(inst.is_wrong_path && std::size(inst.source_memory)){
               sim_stats.wrong_path_loads++;
           }
-	      sim_stats.wrong_path_insts++;
+	        sim_stats.wrong_path_insts++;
           sim_stats.wrong_path_skipped++;
+          if(inst.is_prefetch){
+            sim_stats.is_prefetch_insts++;
+            sim_stats.is_prefetch_skipped++;
+          }
 #ifdef BGODALA
           fmt::print("exec_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -161,8 +165,12 @@ void O3_CPU::initialize_instruction()
             if(inst.is_wrong_path && std::size(inst.source_memory)){
                 sim_stats.wrong_path_loads++;
             }
-	        sim_stats.wrong_path_insts++;
+	          sim_stats.wrong_path_insts++;
             sim_stats.wrong_path_skipped++;
+            if(inst.is_prefetch){
+               sim_stats.is_prefetch_insts++;
+               sim_stats.is_prefetch_skipped++;
+            }
 #ifdef BGODALA
             fmt::print("decode_flush ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -186,8 +194,12 @@ void O3_CPU::initialize_instruction()
         if(inst.is_wrong_path && std::size(inst.source_memory)){
             sim_stats.wrong_path_loads++;
         }
-	    sim_stats.wrong_path_insts++;
-            sim_stats.wrong_path_skipped++;
+	      sim_stats.wrong_path_insts++;
+        sim_stats.wrong_path_skipped++;
+        if(inst.is_prefetch){
+            sim_stats.is_prefetch_insts++;
+            sim_stats.is_prefetch_skipped++;
+        }
 #ifdef BGODALA
             fmt::print("ignore ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
 #endif
@@ -275,6 +287,9 @@ void O3_CPU::initialize_instruction()
 
     if(inst.is_wrong_path){
         sim_stats.wrong_path_insts++;
+    }
+    if(inst.is_prefetch){
+        sim_stats.is_prefetch_insts++;
     }
 
     // Update stats of non mispredicting branches here
@@ -535,7 +550,7 @@ long O3_CPU::promote_to_decode()
 {
 
   //Erase is_prefetch entries whose fetch was completed
-    IFETCH_BUFFER.erase(std::remove_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), [](const auto& x) { return x.fetch_completed && x.is_prefetch; }), std::end(IFETCH_BUFFER));
+  IFETCH_BUFFER.erase(std::remove_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), [](const auto& x) { return x.fetch_completed && x.is_prefetch; }), std::end(IFETCH_BUFFER));
 
   auto available_fetch_bandwidth = std::min<long>(FETCH_WIDTH, static_cast<long>(DECODE_BUFFER_SIZE - std::size(DECODE_BUFFER)));
   auto [window_begin, window_end] = champsim::get_span_p(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), available_fetch_bandwidth,
@@ -560,7 +575,7 @@ long O3_CPU::decode_instruction()
   uint64_t flushed = 0;
   // Send decoded instructions to dispatch
   std::for_each(window_begin, window_end, [&, this](auto& db_entry) {
-    this->do_dib_update(db_entry);
+    //this->do_dib_update(db_entry);
 
     // Resume fetch
     if ((db_entry.branch_mispredicted && !db_entry.is_wrong_path )) {
