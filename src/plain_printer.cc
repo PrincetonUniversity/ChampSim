@@ -121,7 +121,7 @@ void champsim::plain_printer::print(CACHE::stats_type stats)
 
     fmt::print(stream, "{} PREFETCH REQUESTED: {:10} ISSUED: {:10} USEFUL: {:10} USELESS: {:10}\n", stats.name, stats.pf_requested, stats.pf_issued,
                stats.pf_useful, stats.pf_useless);
-    fmt::print(stream, "{} WRONG-PATH ACCESS: {:10} LOAD: {:10} USEFULL: {:10} FILL: {:10} USELESS: {:10} POLLUTUION: {:.4g} \n", stats.name, stats.wp_load + stats.wp_store, stats.wp_load, stats.wp_useful, stats.wp_fill, stats.wp_useless, stats.avg_pollution);
+    fmt::print(stream, "{} WRONG-PATH ACCESS: {:10} LOAD: {:10} USEFULL: {:10} FILL: {:10} USELESS: {:10} POLLUTUION: {:.4g} WP_FILL: {:10} WP_MISS: {:10} CP_FILL: {:10} CP_MISS: {:10}\n", stats.name, stats.wp_load + stats.wp_store, stats.wp_load, stats.wp_useful, stats.wp_fill, stats.wp_useless, stats.avg_pollution, stats.wp_fill, stats.wp_miss, stats.cp_fill, stats.cp_miss);
 
     fmt::print(stream, "{} AVERAGE MISS LATENCY: {:.4g} cycles\n", stats.name, stats.avg_miss_latency);
   }

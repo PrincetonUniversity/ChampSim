@@ -205,6 +205,8 @@ bool CACHE::handle_fill(const mshr_type& fill_mshr)
       if (way != set_end && way->valid && !way->wrong_path){
         ++sim_stats.wp_evicted;
       }
+    } else {
+      ++sim_stats.cp_fill;      
     }
 
     if(1){
@@ -550,6 +552,11 @@ long CACHE::operate()
     }
     if (this->try_hit(pkt)) {
       return true;
+    } else {
+      if(pkt.wrong_path)
+          ++sim_stats.wp_miss;
+      else 
+          ++sim_stats.cp_miss;
     }
     if (pkt.type == access_type::WRITE && !this->match_offset_bits) {
       return this->handle_write(pkt); // Treat writes (that is, writebacks) like fills
@@ -942,9 +949,13 @@ void CACHE::end_phase(unsigned finished_cpu)
   roi_stats.pf_useless = sim_stats.pf_useless;
   roi_stats.pf_fill = sim_stats.pf_fill;
 
+  roi_stats.wp_miss = sim_stats.wp_miss;
+  roi_stats.cp_miss = sim_stats.cp_miss;
+  roi_stats.wp_fill = sim_stats.wp_fill;
+  roi_stats.cp_fill = sim_stats.cp_fill;
+
   roi_stats.wp_load = sim_stats.wp_load;
   roi_stats.wp_store = sim_stats.wp_store;
-  roi_stats.wp_fill = sim_stats.wp_fill;
   roi_stats.wp_useless = sim_stats.wp_useless;
   roi_stats.wp_useful = sim_stats.wp_useful;
   roi_stats.wp_evicted = sim_stats.wp_evicted;

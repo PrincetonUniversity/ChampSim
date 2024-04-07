@@ -59,6 +59,9 @@ struct cache_stats {
   uint64_t wp_load = 0;
   uint64_t wp_store = 0;
   uint64_t wp_fill = 0;
+  uint64_t cp_fill = 0;
+  uint64_t wp_miss = 0;
+  uint64_t cp_miss = 0;  
   uint64_t wp_evicted = 0; // To track cache line from right path evicted by wrong path req.
   uint64_t wp_useless = 0;
   uint64_t wp_useful = 0;
