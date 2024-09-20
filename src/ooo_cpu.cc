@@ -541,7 +541,7 @@ long O3_CPU::decode_instruction()
   uint64_t flushed = 0;
   // Send decoded instructions to dispatch
   std::for_each(window_begin, window_end, [&, this](auto& db_entry) {
-    this->do_dib_update(db_entry);
+    // this->do_dib_update(db_entry);
 
     // Resume fetch
     if ((db_entry.branch_mispredicted && !db_entry.is_wrong_path )) {
