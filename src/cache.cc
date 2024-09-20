@@ -723,6 +723,11 @@ void CACHE::impl_prefetcher_branch_operate(uint64_t ip, uint8_t branch_type, uin
   pref_module_pimpl->impl_prefetcher_branch_operate(ip, branch_type, branch_target);
 }
 
+void CACHE::impl_prefetcher_squash(uint64_t ip, uint64_t instr_id) const
+{
+  pref_module_pimpl->impl_prefetcher_squash(ip,instr_id);
+}
+
 void CACHE::impl_initialize_replacement() const { repl_module_pimpl->impl_initialize_replacement(); }
 
 long CACHE::impl_find_victim(uint32_t triggering_cpu, uint64_t instr_id, long set, const BLOCK* current_set, uint64_t ip, uint64_t full_addr,

@@ -268,6 +268,10 @@ void O3_CPU::initialize_instruction()
         sim_stats.wrong_path_insts++;
     }
 
+    if(inst.is_branch){
+      l1i->impl_prefetcher_branch_operate(inst.ip, inst.branch, inst.branch_target);
+    }
+
     // Update stats of non mispredicting branches here
     if(!inst.branch_mispredicted){
         update_branch_stats(input_queue.front());
@@ -508,7 +512,7 @@ bool O3_CPU::do_fetch_instruction(std::deque<ooo_model_instr>::iterator begin, s
                std::size(fetch_packet.instr_depend_on_me), begin->event_cycle);
   }
 
-
+  fetch_packet.pf_metadata = begin->is_wrong_path; // This info is expected here for EIP and only used for collecting stats
   return L1I_bus.issue_read(fetch_packet);
 }
 
@@ -996,6 +1000,7 @@ void O3_CPU::do_complete_execution(ooo_model_instr& instr)
     fetch_resume_cycle = current_cycle + BRANCH_MISPREDICT_PENALTY;
     prev_fetch_block = 0;
     restart = true;
+    l1i->impl_prefetcher_squash(instr.ip, instr.instr_id);
 
     //fmt::print("C[EXEC]: cycle {} ip: {:x} branch {}\n", current_cycle, instr.ip, instr.branch); 
 #ifdef BGODALA
