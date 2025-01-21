@@ -85,6 +85,7 @@ void champsim::plain_printer::print(O3_CPU::stats_type stats)
   fmt::print(stream, "LQ Full Events {}\n", stats.lq_full_events);
   fmt::print(stream, "SQ Full Events {}\n", stats.sq_full_events);
   fmt::print(stream, "Non Branch Squashes {}\n", stats.non_branch_squashes);
+  fmt::print(stream, "WP Not Available Count {} Cycles {}\n", stats.lack_of_WP_inst_count, stats.lack_of_WP_inst_cycles);
   fmt::print(stream, "\n");
 
   fmt::print(stream, "Inst Stats\n");

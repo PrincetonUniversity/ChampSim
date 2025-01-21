@@ -212,14 +212,16 @@ void O3_CPU::initialize_instruction()
     #ifdef BGODALA
     fmt::print("inserting ip: {:#x} wp: {}\n", inst.ip, inst.is_wrong_path);
     #endif
-
+    
+    // Following condition will be only true if the wrong path instructions are finished 
     if (in_wrong_path && !inst.is_wrong_path){
         stop_fetch = true;
-	    in_wrong_path = false;
+	      in_wrong_path = false;
         fetch_resume_cycle = std::numeric_limits<uint64_t>::max();
         #ifdef BGODALA
-	    fmt::print("wrong path over at ip: {:#x}\n", inst.ip);
+	        fmt::print("wrong path over at ip: {:#x}\n", inst.ip);
         #endif
+        WP_insts_not_available = true;
 	    break;
     }
 
@@ -441,6 +443,18 @@ long O3_CPU::fetch_instruction()
   bool failed = false;
 
   auto l1i_req_begin = std::find_if(std::begin(IFETCH_BUFFER), std::end(IFETCH_BUFFER), fetch_ready);
+  
+  if(WP_insts_not_available && IFETCH_BUFFER.empty() && !WP_insts_not_available_cycle){
+      sim_stats.lack_of_WP_inst_count++;
+      WP_insts_not_available_cycle = current_cycle;
+  } 
+
+  if (WP_insts_not_available_cycle && IFETCH_BUFFER.size()) {
+      sim_stats.lack_of_WP_inst_cycles += current_cycle - WP_insts_not_available_cycle;
+      WP_insts_not_available = false;
+      WP_insts_not_available_cycle = 0;
+  }
+
   for (auto to_read = L1I_BANDWIDTH; to_read > 0 && l1i_req_begin != std::end(IFETCH_BUFFER); --to_read) {
     auto l1i_req_end = std::adjacent_find(l1i_req_begin, std::end(IFETCH_BUFFER), no_match_ip);
     if (l1i_req_end != std::end(IFETCH_BUFFER)) {
@@ -466,8 +480,12 @@ long O3_CPU::fetch_instruction()
       if(!IFETCH_BUFFER.empty()){
           if(!IFETCH_BUFFER.back().fetch_issued){
               sim_stats.fetch_buffer_not_empty++; 
+          } else {
+              //sim_stats.fetch_buffer_not_empty++; 
           }
       }
+  } else {
+    // sim_stats.
   }
 
   if(fetch_resume_cycle == std::numeric_limits<uint64_t>::max()){
