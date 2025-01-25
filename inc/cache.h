@@ -238,6 +238,7 @@ public:
     virtual void impl_prefetcher_cycle_operate() = 0;
     virtual void impl_prefetcher_final_stats() = 0;
     virtual void impl_prefetcher_branch_operate(uint64_t ip, uint8_t branch_type, uint64_t branch_target) = 0;
+    virtual void impl_prefetcher_squash(uint64_t ip, uint64_t instr_id) = 0;
   };
 
   struct replacement_module_concept {
@@ -263,6 +264,7 @@ public:
     void impl_prefetcher_cycle_operate() final;
     void impl_prefetcher_final_stats() final;
     void impl_prefetcher_branch_operate(uint64_t ip, uint8_t branch_type, uint64_t branch_target) final;
+    void impl_prefetcher_squash(uint64_t ip, uint64_t instr_id) final;
   };
 
   template <typename... Rs>
@@ -292,6 +294,7 @@ public:
   void impl_prefetcher_cycle_operate() const;
   void impl_prefetcher_final_stats() const;
   void impl_prefetcher_branch_operate(uint64_t ip, uint8_t branch_type, uint64_t branch_target) const;
+  void impl_prefetcher_squash(uint64_t ip, uint64_t instr_id) const;
 
   void impl_initialize_replacement() const;
   [[nodiscard]] long impl_find_victim(uint32_t triggering_cpu, uint64_t instr_id, long set, const BLOCK* current_set, uint64_t ip, uint64_t full_addr,
@@ -387,6 +390,19 @@ void CACHE::prefetcher_module_model<Ps...>::impl_prefetcher_branch_operate(uint6
     using namespace champsim::modules;
     if constexpr (prefetcher::has_branch_operate<decltype(p), uint64_t, uint8_t, uint64_t>)
       p.prefetcher_branch_operate(ip, branch_type, branch_target);
+  };
+
+  std::apply([&](auto&... p) { (..., process_one(p)); }, intern_);
+}
+
+//prefetcher_squash(uint64_t ip, uint64_t instr_id)
+template <typename... Ps>
+void CACHE::prefetcher_module_model<Ps...>::impl_prefetcher_squash(uint64_t ip, uint64_t instr_id)
+{
+  [[maybe_unused]] auto process_one = [&](auto& p) {
+    using namespace champsim::modules;
+    if constexpr (prefetcher::has_squash<decltype(p), uint64_t, uint64_t>)
+      p.prefetcher_squash(ip, instr_id);
   };
 
   std::apply([&](auto&... p) { (..., process_one(p)); }, intern_);

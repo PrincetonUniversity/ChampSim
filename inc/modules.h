@@ -127,6 +127,11 @@ struct prefetcher {
   static auto branch_operate_member_impl(long) -> std::false_type;
 
   template <typename T, typename... Args>
+  static auto squash_member_impl(int) -> decltype(std::declval<T>().prefetcher_squash(std::declval<Args>()...), std::true_type{});
+  template <typename, typename...>
+  static auto squash_member_impl(long) -> std::false_type;
+
+  template <typename T, typename... Args>
   constexpr static bool has_initialize = decltype(initiailize_memory_impl<T, Args...>(0))::value;
 
   template <typename T, typename... Args>
@@ -143,6 +148,9 @@ struct prefetcher {
 
   template <typename T, typename... Args>
   constexpr static bool has_branch_operate = decltype(branch_operate_member_impl<T, Args...>(0))::value;
+  
+  template <typename T, typename... Args>
+  constexpr static bool has_squash = decltype(squash_member_impl<T, Args...>(0))::value;
 };
 
 struct replacement {
