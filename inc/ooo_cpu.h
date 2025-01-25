@@ -159,6 +159,7 @@ public:
   uint64_t exec_instr_id=0;
   bool enable_wrong_path=false;
   uint64_t flush_after=0;
+  uint64_t last_wp_cycle=0;
 
   // instruction
   long long num_retired = 0;
